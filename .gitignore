@@ -18,7 +18,7 @@ temp/
 *.tmp
 
 # === Переменные окружения и секреты ===
-.env
+backend/app/.env
 .env.*
 !.env.example
 *.pem
