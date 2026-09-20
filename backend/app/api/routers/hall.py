@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.schemas.halls import HallSchema, HallAddSchema, HallWithSeatsSchema
+from app.schemas.halls import HallSchema, HallAddSchema, HallWithSeatsSchema, HallPricesUpdateSchema
 from app.api.dependencies import get_hall_service
 from app.services.hall import HallService, HallNotFound, SeatNotFound
 from app.schemas.seats import SeatsBulkUpdateSchema
@@ -42,6 +42,18 @@ def bulk_update_seats(
     try:
         return service.bulk_update_seats(number, payload)
     except (HallNotFound, SeatNotFound):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+# Обновление цен на места(кресла) - по сути Конфигурирование цен
+@router.patch("/{number}/prices", response_model=HallSchema)
+def update_prices(
+    number: int,
+    payload: HallPricesUpdateSchema,
+    service: HallService = Depends(get_hall_service),
+):
+    try:
+        return service.update_prices(number, payload)
+    except HallNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 # Удаление зала

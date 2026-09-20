@@ -7,7 +7,8 @@ class HallSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     number: int
-
+    price_standard: int
+    price_vip: int
 
 class HallAddSchema(BaseModel):
     rows: int = Field(gt=0, le=50) # greater than 0 (строго больше нуля) рядов
@@ -16,3 +17,7 @@ class HallAddSchema(BaseModel):
 
 class HallWithSeatsSchema(HallSchema):
     seats: list[SeatSchema] = []
+
+class HallPricesUpdateSchema(BaseModel):
+    price_standard: int = Field(ge=0, le=100_000)
+    price_vip: int = Field(ge=0, le=100_000)

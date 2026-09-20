@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.repositories.halls import HallRepository
-from app.schemas.halls import HallSchema, HallWithSeatsSchema, HallAddSchema
+from app.schemas.halls import HallSchema, HallWithSeatsSchema, HallAddSchema, HallPricesUpdateSchema
 from app.models.seats import SeatORM
 from app.repositories.seats import SeatRepository
 from app.schemas.seats import SeatsBulkUpdateSchema
@@ -63,6 +63,16 @@ class HallService:
         self.db.commit()
         self.db.refresh(hall)
         return HallWithSeatsSchema.model_validate(hall)
+
+    def update_prices(self, number: int, data: HallPricesUpdateSchema) -> HallSchema:
+        hall = self.hall_repository.get_by_number(number)
+        if not hall:
+            raise HallNotFound(f"Зал {number} не найден")
+        hall.price_standard = data.price_standard
+        hall.price_vip = data.price_vip
+        self.db.commit()
+        self.db.refresh(hall)
+        return HallSchema.model_validate(hall)
 
     def delete_hall(self, number: int) -> None:
         hall_for_delete = self.hall_repository.get_by_number(number)

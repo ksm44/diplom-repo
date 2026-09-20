@@ -12,6 +12,9 @@ class HallORM(Base):
     __tablename__ = "halls"
     number: Mapped[int] = mapped_column(unique=True)
 
+    price_standard: Mapped[int] = mapped_column(default=300)
+    price_vip: Mapped[int] = mapped_column(default=600)
+
     seats: Mapped[list["SeatORM"]] = relationship(
         back_populates="hall",
         cascade="all, delete-orphan", # Кресла, отвязанные от Зала, удалятся (orphan - с англ. сирота)
