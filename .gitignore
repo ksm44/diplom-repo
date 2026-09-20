@@ -18,7 +18,7 @@ temp/
 *.tmp
 
 # === Переменные окружения и секреты ===
-backend/app/.env
+.env
 .env.*
 !.env.example
 *.pem
@@ -32,3 +32,5 @@ __pycache__/
 .venv/
 venv/
 env/
+
+*.css.map
