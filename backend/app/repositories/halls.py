@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.models.halls import HallORM
 from app.schemas.halls import HallAddSchema
 
@@ -28,7 +28,11 @@ class HallRepository:
         self.db.flush()
 
     def get_by_number(self, number: int) -> HallORM | None:
-        return self.db.scalar(select(HallORM).where(HallORM.number == number))
+        return self.db.scalar(
+            select(HallORM)
+            .options(selectinload(HallORM.seats))
+            .where(HallORM.number == number)
+        )
 
     def _next_number(self) -> int:
         existing = set(self.db.scalars(select(HallORM.number)).all())
