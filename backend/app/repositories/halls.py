@@ -1,9 +1,8 @@
 from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
+
 from app.models.halls import HallORM
-from app.schemas.halls import HallAddSchema
 
 
 class HallRepository:

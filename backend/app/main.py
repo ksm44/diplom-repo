@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import engine
 from app.models.base import Base #создал __init__.py чтобы не было unresolved
 from app.api.routers.hall import router as hall_router
+from app.api.routers.movie import router as movie_router
 
 
 @asynccontextmanager # Контекстный менеджер создает таблицы в БД при старте приложения
@@ -14,6 +15,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(router=hall_router)
+app.include_router(router=movie_router)
 
 app.add_middleware(
     CORSMiddleware, # type: ignore

@@ -1,7 +1,6 @@
 import enum
 from typing import TYPE_CHECKING
 from uuid import UUID
-
 from sqlalchemy import UniqueConstraint, ForeignKey, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base

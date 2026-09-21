@@ -1,5 +1,6 @@
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
+
 from app.models.seats import SeatKind
 
 class SeatSchema(BaseModel):
