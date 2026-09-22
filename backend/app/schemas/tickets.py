@@ -14,6 +14,7 @@ class TicketResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     code: str
+    qr_code_url: str
     screening_id: UUID
     total_price: int
     created_at: datetime

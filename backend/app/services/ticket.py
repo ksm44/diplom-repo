@@ -1,5 +1,8 @@
 from uuid import UUID, uuid4
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
+from pathlib import Path
+
+import qrcode
 from sqlalchemy.orm import Session
 
 from app.models.tickets import TicketORM
@@ -11,6 +14,8 @@ from app.repositories.seats import SeatRepository
 from app.repositories.tickets import TicketRepository
 from app.schemas.tickets import TicketCreateSchema, TicketResponseSchema
 
+QR_DIR = Path("static/qrcodes")
+
 
 class TicketError(Exception):
     """Базовое исключение билета."""
@@ -19,7 +24,7 @@ class HallNotFound(TicketError):
     """Зал не найден в БД"""
 
 class ScreeningNotFound(TicketError):
-    """Сеанса не найдено в БД"""
+    """Сеанс не найден в БД"""
 
 class SalesClosed(TicketError):
     """Продажа билетов приостановлена"""
@@ -86,4 +91,28 @@ class TicketService:
         ticket = self.ticket_repo.create(ticket, [s.id for s in seats], screening.id)
         self.db.commit()
         self.db.refresh(ticket)
+
+        # Генерация QR-кода и сохранение пути в БД
+        ticket.qr_code_url = self._generate_qr(ticket, screening)
+        self.db.commit()
+        self.db.refresh(ticket)
+
         return TicketResponseSchema.model_validate(ticket)
+
+    @staticmethod
+    def _generate_qr(ticket: TicketORM, screening) -> str:
+        """Создаёт PNG с QR и возвращает URL для отдачи."""
+        QR_DIR.mkdir(parents=True, exist_ok=True)
+
+        qr_data = (
+            f"Билет:{ticket.code}"
+            f"|Сеанс:{screening.id}"
+            f"|Сумма:{ticket.total_price}"
+        )
+
+        img = qrcode.make(qr_data)
+        filename = f"{ticket.code}.png"
+        filepath = QR_DIR / filename
+        img.save(filepath)
+
+        return f"/static/qrcodes/{filename}"

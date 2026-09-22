@@ -1,7 +1,9 @@
 # Дипломный проект
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.db.session import engine
 from app.models.base import Base #создал __init__.py чтобы не было unresolved
 from app.api.routers.hall import router as hall_router
@@ -15,6 +17,13 @@ async def lifespan(_: FastAPI):
     yield  # после yield можно предусмотреть действия, которые будут выполняться после завершения работы приложения
 
 app = FastAPI(lifespan=lifespan)
+
+STATIC_DIR = Path("static")
+STATIC_DIR.mkdir(exist_ok=True)
+
+# статика и QR-коды тут http://localhost:8000/static/qrcodes/{code}.png
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 app.include_router(router=hall_router)
 app.include_router(router=movie_router)
 app.include_router(router=screening_router)

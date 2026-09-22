@@ -31,3 +31,4 @@ class TicketORM(Base):
 
     ###SQLAlchemy сам поймёт как использовать вспомогательную(промежуточную) таблицу
     seats: Mapped[list["SeatORM"]] = relationship(secondary="ticket_seats")
+    qr_code_url: Mapped[str] = mapped_column(default="")  # путь к PNG на бэкенде
