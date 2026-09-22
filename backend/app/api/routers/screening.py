@@ -9,7 +9,7 @@ from app.schemas.screenings import (
     ScreeningResponseSchema,
 )
 from app.services.screening import (
-    ScreeningService, ScreeningNotFound, ScreeningOverlap, ScreeningOutOfDay,
+    ScreeningService, ScreeningNotFound, ScreeningOverlap, ScreeningOutOfDay, ScreeningInPast,
 )
 
 router = APIRouter(prefix="/screenings", tags=["Сеансы"])
@@ -31,9 +31,11 @@ def add_screening(
     try:
         return service.create_screening(payload)
     except ScreeningNotFound as e:
-        raise HTTPException(404, str(e))
+        raise HTTPException(404, detail=str(e))
     except (ScreeningOverlap, ScreeningOutOfDay) as e:
-        raise HTTPException(409, str(e))
+        raise HTTPException(409, detail=str(e))
+    except ScreeningInPast as e:
+        raise HTTPException(403, detail=str(e))
 
 # PUT, а не PATHC т.к. происходит полное новое состояние ресурса
 # PATCH - это частичное изменение
@@ -49,6 +51,8 @@ def bulk_save(
         raise HTTPException(404, str(e))
     except (ScreeningOverlap, ScreeningOutOfDay) as e:
         raise HTTPException(409, str(e))
+    except ScreeningInPast as e:
+        raise HTTPException(403, detail=str(e))
 
 
 @router.delete("/{screening_id}", status_code=status.HTTP_204_NO_CONTENT)

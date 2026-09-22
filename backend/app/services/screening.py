@@ -12,10 +12,11 @@ from app.schemas.screenings import ScreeningAddSchema, ScreeningResponseSchema
 
 class ScreeningNotFound(Exception): ...
 class ScreeningOverlap(Exception):
-    """Сеанс пересекается с другим в этом зале."""
+    """Киносеанс пересекается по времени с другим в этом зале."""
 class ScreeningOutOfDay(Exception):
-    """Сеанс выходит за пределы суток."""
-
+    """Киносеанс выходит за пределы суток."""
+class ScreeningInPast(Exception):
+    """Попытка создать киносеанс в прошлом"""
 
 class ScreeningService:
     def __init__(self, db: Session) -> None:
@@ -28,6 +29,9 @@ class ScreeningService:
 
     def create_screening(self, data: ScreeningAddSchema) -> ScreeningResponseSchema:
         start = self._to_utc(data.datetime_start)
+        if start <= datetime.now(timezone.utc):
+            raise ScreeningInPast("Нельзя создать сеанс в прошлом")
+
 
         movie = self.movie_repo.get_by_id(data.movie_id)
         if not movie:
@@ -61,6 +65,9 @@ class ScreeningService:
                 raise ScreeningNotFound(f"Фильм {screening.movie_id} не найден")
 
             start = self._to_utc(screening.datetime_start)
+            if start <= datetime.now(timezone.utc):
+                raise ScreeningInPast(f"Сеанс {start} в прошлом")
+            
             end = start + timedelta(minutes=movie.duration)
 
             self._check_within_day(start, end)

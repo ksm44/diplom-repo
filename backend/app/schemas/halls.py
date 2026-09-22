@@ -10,6 +10,7 @@ class HallSchema(BaseModel):
     number: int
     price_standard: int
     price_vip: int
+    is_active: bool # открытие/приостановка продажи билетов
 
 class HallAddSchema(BaseModel):
     rows: int = Field(gt=0, le=50) # greater than 0 (строго больше нуля) рядов

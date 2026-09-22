@@ -22,7 +22,6 @@ def get_hall(
     except HallNotFound as e:
         raise HTTPException(404, detail=str(e))
 
-
 # Создание(добавление) нового зала
 @router.post("", status_code=status.HTTP_201_CREATED)
 def add_hall(
@@ -42,6 +41,14 @@ def bulk_update_seats(
         return service.bulk_update_seats(number, payload)
     except (HallNotFound, SeatNotFound) as e:
         raise HTTPException(404, detail=str(e))
+
+@router.patch("/{number}/activate")
+def toggle_active(number: int, service: HallService = Depends(get_hall_service)) -> HallSchema:
+    try:
+        return service.toggle_active(number)
+    except HallNotFound as e:
+        raise HTTPException(404, detail=str(e))
+
 
 # Обновление цен на места(кресла) - по сути Конфигурирование цен
 @router.patch("/{number}/prices")

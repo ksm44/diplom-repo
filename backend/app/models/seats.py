@@ -34,7 +34,7 @@ class SeatORM(Base):
         default=SeatKind.STANDARD,
     )
     is_blocked: Mapped[bool] = mapped_column(default=False)  # заблокировано Админом
-    is_booked: Mapped[bool] = mapped_column(default=False)  # занято Пользователем
+    # убрал is_booked - бронь кресла будем проверять через существавание билета на конкретный сеанс кинозала
 
     # это Python-объект для удобства (например print(seat.hall.number)  ← получаем зал через relationship)
     hall: Mapped["HallORM"] = relationship(back_populates="seats")

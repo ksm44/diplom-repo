@@ -74,6 +74,15 @@ class HallService:
         self.db.refresh(hall)
         return HallSchema.model_validate(hall)
 
+    def toggle_active(self, number: int) -> HallSchema:
+        hall = self.hall_repository.get_by_number(number)
+        if not hall:
+            raise HallNotFound(f"Зал {number} не найден")
+        hall.is_active = not hall.is_active
+        self.db.commit()
+        self.db.refresh(hall)
+        return HallSchema.model_validate(hall)
+
     def delete_hall(self, number: int) -> None:
         hall_for_delete = self.hall_repository.get_by_number(number)
         if not hall_for_delete:

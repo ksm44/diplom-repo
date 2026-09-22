@@ -15,6 +15,7 @@ class HallORM(Base):
 
     price_standard: Mapped[int] = mapped_column(default=300)
     price_vip: Mapped[int] = mapped_column(default=600)
+    is_active: Mapped[bool] = mapped_column(default=False) # открытие/приостановка продажи билетов
 
     seats: Mapped[list["SeatORM"]] = relationship(
         back_populates="hall",

@@ -10,7 +10,7 @@ class SeatSchema(BaseModel):
     number: int
     kind: SeatKind
     is_blocked: bool
-    is_booked: bool
+    # is_booked: bool удалил, т.к. бронь кресла теперь проверяется через tickets
 
 class SeatUpdateItem(BaseModel):
     """Одно кресло в пакетном обновлении."""
