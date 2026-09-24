@@ -34,3 +34,6 @@ venv/
 env/
 
 *.css.map
+
+# === Фронтенд ===
+dist/

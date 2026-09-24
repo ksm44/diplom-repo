@@ -78,7 +78,8 @@ DockerDesktop может не запускать работу с контейн�
     │   │   └── main.py
     │   ├── .env
     │   └── requirements.txt
-    │
+    ├── frontend/ 
+    ...
     ├── client/
     │   ├── css/
     │   ├── i/
