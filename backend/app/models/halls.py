@@ -1,13 +1,12 @@
 from typing import TYPE_CHECKING
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
-from .screenings import ScreeningORM
-
 
 # Устраняем проблему циклического импорта для relationship
 # т.к. импорт нужен только для аннотации типов и не потребуется в рантайме
 if TYPE_CHECKING:
     from .seats import SeatORM
+    from .screenings import ScreeningORM
 
 class HallORM(Base):
     __tablename__ = "halls"

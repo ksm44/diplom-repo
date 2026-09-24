@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.dependencies import get_screening_service
+from app.api.dependencies import get_screening_service, require_admin, get_current_user
 from app.schemas.screenings import (
     ScreeningAddSchema,
     ScreeningResponseSchema,
@@ -15,7 +15,7 @@ from app.services.screening import (
 router = APIRouter(prefix="/screenings", tags=["Сеансы"])
 
 
-@router.get("", response_model=list[ScreeningResponseSchema])
+@router.get("", response_model=list[ScreeningResponseSchema], dependencies=[Depends(get_current_user)])
 def get_screenings(
     date_screening: date,
     service: ScreeningService = Depends(get_screening_service),
@@ -23,7 +23,11 @@ def get_screenings(
     return service.list_by_date(date_screening)
 
 
-@router.post("", response_model=ScreeningResponseSchema, status_code=status.HTTP_201_CREATED)
+@router.post("",
+             response_model=ScreeningResponseSchema,
+             status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(require_admin)]
+)
 def add_screening(
     payload: ScreeningAddSchema,
     service: ScreeningService = Depends(get_screening_service),
@@ -39,7 +43,7 @@ def add_screening(
 
 # PUT, а не PATHC т.к. происходит полное новое состояние ресурса
 # PATCH - это частичное изменение
-@router.put("", response_model=list[ScreeningResponseSchema])
+@router.put("", response_model=list[ScreeningResponseSchema], dependencies=[Depends(require_admin)])
 def bulk_save(
     date_screening: date,
     payload: list[ScreeningAddSchema],
@@ -55,7 +59,8 @@ def bulk_save(
         raise HTTPException(403, detail=str(e))
 
 
-@router.delete("/{screening_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{screening_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)]
+               )
 def delete_screening(
     screening_id: UUID,
     service: ScreeningService = Depends(get_screening_service),

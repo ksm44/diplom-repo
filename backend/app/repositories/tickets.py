@@ -22,6 +22,11 @@ class TicketRepository:
         ).all()
         return set(rows)
 
+    def get_by_user(self, user_id: UUID) -> list[TicketORM]:
+        return list(self.db.scalars(
+            select(TicketORM).where(TicketORM.user_id == user_id).order_by(TicketORM.created_at.desc())
+        ).all())
+
     def create(self, ticket: TicketORM, seat_ids: list[UUID], screening_id: UUID) -> TicketORM:
         self.db.add(ticket)
         self.db.flush()

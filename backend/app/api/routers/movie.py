@@ -2,21 +2,21 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.dependencies import get_movie_service
+from app.api.dependencies import get_movie_service, require_admin, get_current_user
 from app.services.movie import MovieService, MovieNotFound, MovieAlreadyExists
 from app.schemas.movies import MovieResponseSchema, MovieAddSchema
 
 router = APIRouter(prefix="/movies", tags=["Фильмы"])
 
 # Получение фильмов
-@router.get("")
+@router.get("", dependencies=[Depends(get_current_user)])
 def get_movies(
         movie_service: MovieService = Depends(get_movie_service)
     ) -> list[MovieResponseSchema]:
     return movie_service.list_movies()
 
 # Создание(добавление) фильма
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
 def add_movie(
         payload: MovieAddSchema,
         movie_service: MovieService = Depends(get_movie_service)
@@ -28,7 +28,7 @@ def add_movie(
 
 
 # Удаление фильма
-@router.delete("/{movie_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{movie_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
 def delete_movie(
         movie_id: UUID,
         movie_service: MovieService = Depends(get_movie_service)

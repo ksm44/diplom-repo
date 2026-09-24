@@ -13,6 +13,7 @@ from app.repositories.screenings import ScreeningRepository
 from app.repositories.seats import SeatRepository
 from app.repositories.tickets import TicketRepository
 from app.schemas.tickets import TicketCreateSchema, TicketResponseSchema
+from app.models.users import UserORM
 
 QR_DIR = Path("static/qrcodes")
 
@@ -48,7 +49,7 @@ class TicketService:
         self.seat_repo = SeatRepository(db)
         self.ticket_repo = TicketRepository(db)
 
-    def buy(self, data: TicketCreateSchema) -> TicketResponseSchema:
+    def buy(self, data: TicketCreateSchema, user: UserORM) -> TicketResponseSchema:
         screening = self.screening_repo.get_by_id(data.screening_id)
         if not screening:
             raise ScreeningNotFound("Сеанс не найден")
@@ -87,6 +88,7 @@ class TicketService:
             code=str(uuid4()),
             screening_id=screening.id,
             total_price=total,
+            user_id=user.id,
         )
         ticket = self.ticket_repo.create(ticket, [s.id for s in seats], screening.id)
         self.db.commit()
@@ -98,6 +100,10 @@ class TicketService:
         self.db.refresh(ticket)
 
         return TicketResponseSchema.model_validate(ticket)
+
+    def list_my_tickets(self, user_id: UUID) -> list[TicketResponseSchema]:
+        tickets = self.ticket_repo.get_by_user(user_id)
+        return [TicketResponseSchema.model_validate(t) for t in tickets]
 
     @staticmethod
     def _generate_qr(ticket: TicketORM, screening) -> str:
