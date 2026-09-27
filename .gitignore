@@ -37,3 +37,15 @@ env/
 
 # === Фронтенд ===
 dist/
+
+# === Дистрибутивы / кэш сборки ===
+dist/
+build/
+.cache/
+.parcel-cache/
+
+# === Логи npm/yarn ===
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
