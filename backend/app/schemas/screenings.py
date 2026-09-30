@@ -17,3 +17,4 @@ class ScreeningResponseSchema(ScreeningBase):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     datetime_end: datetime      # вычисляется на сервере
+    hall_number: int

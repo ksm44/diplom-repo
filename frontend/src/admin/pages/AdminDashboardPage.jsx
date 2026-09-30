@@ -1,10 +1,9 @@
 // покачто тут заглушка с моковыми данными
 //нужно будет настроить загрузку по api movies, halls и т.д.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiGet, apiPost, apiDelete } from '../../services/api';
 import Accordion from "../components/Accordion";
-
-const HALLS = ['Зал 1', 'Зал 2'];
 
 const MOVIES = [
   { id: 1, title: 'Звёздные войны XXIII: Атака клонированных клонов', duration: 130 },
@@ -47,6 +46,43 @@ const HALL_ROWS = [
 ];
 
 export default function AdminDashboardPage() {
+
+
+  const [rows, setRows] = useState(10);
+  const [cols, setCols] = useState(8);
+  const [halls, setHalls] = useState([]);
+
+  //Получение Залов
+  function loadHalls() {
+    apiGet('/halls').then(setHalls).catch(() => alert('Не удалось загрузить залы'));
+  }
+
+  useEffect(() => {
+    loadHalls();
+  }, []);
+
+  //Создание нового Зала
+  async function handleCreateHall() {
+    try {
+      await apiPost('/halls', { rows: Number(rows), cols: Number(cols) });
+      loadHalls(); // ← обновляем список
+    } catch {
+      alert('Не удалось создать зал');
+    }
+  }
+
+  //Удаление Зала
+  async function handleRemoveHall(hall_number) {
+    if (!window.confirm(`Действительно хотите удалить Зал ${hall_number}?`)) return;
+
+    try {
+      await apiDelete(`/halls/${hall_number}`);
+      loadHalls(); // ← обновляем список
+    } catch {
+      alert('Не удалось удалить зал');
+    }
+  }
+
   return (
     <>
       <header className="page-header">
@@ -60,30 +96,34 @@ export default function AdminDashboardPage() {
         <Accordion title="Управление залами" opened>
           <p className="conf-step__paragraph">Доступные залы:</p>
           <ul className="conf-step__list">
-            {HALLS.map((hall) => (
-              <li key={hall}>
-                {hall}
-                <button className="conf-step__button conf-step__button-trash" />
+            {halls.map((hall) => (
+              <li key={hall.id}>
+                Зал {hall.number}
+                <button className="conf-step__button conf-step__button-trash" onClick={() => handleRemoveHall(hall.number)}/>
               </li>
             ))}
           </ul>
-          <button className="conf-step__button conf-step__button-accent">Создать зал</button>
+
+          <button className="conf-step__button conf-step__button-accent" onClick={ handleCreateHall }>
+            Создать зал
+          </button>
+
         </Accordion>
 
         {/* 2. Конфигурация залов */}
         <Accordion title="Конфигурация залов" opened>
           <p className="conf-step__paragraph">Выберите зал для конфигурации:</p>
           <ul className="conf-step__selectors-box">
-            {HALLS.map((hall, i) => (
-              <li key={hall}>
+            {halls.map((hall, i) => (
+              <li key={hall.id}>
                 <input
                   type="radio"
                   className="conf-step__radio"
                   name="chairs-hall"
-                  value={hall}
+                  value={hall.id}
                   defaultChecked={i === 0}
                 />
-                <span className="conf-step__selector">{hall}</span>
+                <span className="conf-step__selector">{hall.number}</span>
               </li>
             ))}
           </ul>
@@ -93,11 +133,23 @@ export default function AdminDashboardPage() {
           </p>
           <div className="conf-step__legend">
             <label className="conf-step__label">
-              Рядов, шт<input type="text" className="conf-step__input" placeholder="10" />
+              Рядов, шт
+              <input
+                type="text"
+                className="conf-step__input"
+                value={rows}
+                onChange={(e) => setRows(e.target.value)}
+              />
             </label>
             <span className="multiplier">x</span>
             <label className="conf-step__label">
-              Мест, шт<input type="text" className="conf-step__input" placeholder="8" />
+              Мест, шт
+              <input
+                type="text"
+                className="conf-step__input"
+                value={cols}
+                onChange={(e) => setCols(e.target.value)}
+              />
             </label>
           </div>
 
@@ -138,16 +190,16 @@ export default function AdminDashboardPage() {
         <Accordion title="Конфигурация цен" opened>
           <p className="conf-step__paragraph">Выберите зал для конфигурации:</p>
           <ul className="conf-step__selectors-box">
-            {HALLS.map((hall, i) => (
-              <li key={hall}>
+            {halls.map((hall, i) => (
+              <li key={hall.id}>
                 <input
                   type="radio"
                   className="conf-step__radio"
                   name="prices-hall"
-                  value={hall}
+                  value={hall.id}
                   defaultChecked={i === 1}
                 />
-                <span className="conf-step__selector">{hall}</span>
+                <span className="conf-step__selector">Зал {hall.number}</span>
               </li>
             ))}
           </ul>

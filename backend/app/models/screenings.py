@@ -27,4 +27,4 @@ class ScreeningORM(Base):
     datetime_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     movie: Mapped["MovieORM"] = relationship()
-    hall: Mapped["HallORM"] = relationship(back_populates="screenings")
+    hall: Mapped["HallORM"] = relationship(lazy="joined", back_populates="screenings")

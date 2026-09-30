@@ -22,12 +22,19 @@ async function request(path, options = {}) {
 
   if (!response.ok) throw new Error('Ошибка запроса к серверу');
 
+  // 204 No Content → нет тела → ничего не возвращаем (чтобы не было ошибок)
+  if (response.status === 204) return null;
+
   return response.json();
 }
 
 // GET-запрос
 export function apiGet(path) {
   return request(path);
+}
+
+export function apiDelete(path) {
+  return request(path, { method: 'DELETE' });
 }
 
 // POST-запрос

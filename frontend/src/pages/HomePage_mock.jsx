@@ -1,3 +1,4 @@
+// src/pages/HomePage.jsx
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/client/normalize.css';
@@ -6,7 +7,7 @@ import { apiGet } from '../services/api';
 
 const WEEK_DAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
-// YYYY-MM-DD в локальном времени
+// Формат YYYY-MM-DD в локальном времени
 function toLocalDateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -30,7 +31,7 @@ function buildDays() {
   });
 }
 
-// "18:30" из ISO-строки (локальное время)
+// "18:30" из ISO-строки в UTC
 function formatTime(iso) {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -40,42 +41,44 @@ export default function HomePage() {
   const days = useMemo(buildDays, []);
   const [selectedDate, setSelectedDate] = useState(days[0].date);
 
-  const [movies, setMovies] = useState([]);       // справочник фильмов
+  const [movies, setMovies] = useState([]);   // все фильмы
+  const [halls, setHalls] = useState([]);     // все залы
   const [screenings, setScreenings] = useState([]); // сеансы на выбранную дату
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // один раз — фильмы
+  // один раз — справочники
   useEffect(() => {
-    apiGet('/movies')
-      .then(setMovies)
-      .catch(() => setError('Не удалось загрузить фильмы'));
+    Promise.all([apiGet('/movies'), apiGet('/halls')])
+      .then(([m, h]) => {
+        setMovies(m);
+        setHalls(h);
+      })
+      .catch(() => setError('Не удалось загрузить фильмы/залы'));
   }, []);
 
   // при смене даты — сеансы
   useEffect(() => {
     setLoading(true);
-    setError(null);
     apiGet(`/screenings?date_screening=${selectedDate}`)
       .then(setScreenings)
       .catch(() => setError('Не удалось загрузить сеансы'))
       .finally(() => setLoading(false));
   }, [selectedDate]);
 
-  // movie_id -> hall_number -> [ {id, start} ]
+  // группировка: movie_id -> hall_id -> [times]
   const grouped = useMemo(() => {
     const map = new Map();
     for (const s of screenings) {
       if (!map.has(s.movie_id)) map.set(s.movie_id, new Map());
       const byHall = map.get(s.movie_id);
-      const hallKey = s.hall_number;
-      if (!byHall.has(hallKey)) byHall.set(hallKey, []);
-      byHall.get(hallKey).push({ id: s.id, start: s.datetime_start });
+      if (!byHall.has(s.hall_id)) byHall.set(s.hall_id, []);
+      byHall.get(s.hall_id).push(s.datetime_start);
     }
-    // сортировка времён внутри каждого зала
+    // сортировка времён
     for (const byHall of map.values()) {
       for (const arr of byHall.values()) {
-        arr.sort((a, b) => new Date(a.start) - new Date(b.start));
+        arr.sort((a, b) => new Date(a) - new Date(b));
       }
     }
     return map;
@@ -84,6 +87,10 @@ export default function HomePage() {
   const movieById = useMemo(
     () => Object.fromEntries(movies.map((m) => [m.id, m])),
     [movies]
+  );
+  const hallById = useMemo(
+    () => Object.fromEntries(halls.map((h) => [h.id, h])),
+    [halls]
   );
 
   return (
@@ -137,31 +144,36 @@ export default function HomePage() {
                   <h2 className="movie__title">{movie.title}</h2>
                   <p className="movie__synopsis">{movie.description}</p>
                   <p className="movie__data">
-                    <span className="movie__data-duration">{movie.duration} минут</span>
+                    <span className="movie__data-duration">
+                      {movie.duration} минут
+                    </span>
                     <span className="movie__data-origin">{movie.country}</span>
                   </p>
                 </div>
               </div>
 
-              {[...hallsMap.entries()]
-                .sort(([a], [b]) => a - b) // залы по возрастанию номера
-                .map(([hallNumber, times]) => (
-                  <div className="movie-seances__hall" key={hallNumber}>
-                    <h3 className="movie-seances__hall-title">Зал {hallNumber}</h3>
+              {[...hallsMap.entries()].map(([hallId, times]) => {
+                const hall = hallById[hallId];
+                return (
+                  <div className="movie-seances__hall" key={hallId}>
+                    <h3 className="movie-seances__hall-title">
+                      {hall ? hall.name : 'Зал'}
+                    </h3>
                     <ul className="movie-seances__list">
-                      {times.map((s) => (
-                        <li className="movie-seances__time-block" key={s.id}>
+                      {times.map((iso) => (
+                        <li className="movie-seances__time-block" key={iso}>
                           <Link
                             className="movie-seances__time"
-                            to={`/hall/${s.id}`}
+                            to={`/hall/${movieId}`}
                           >
-                            {formatTime(s.start)}
+                            {formatTime(iso)}
                           </Link>
                         </li>
                       ))}
                     </ul>
                   </div>
-                ))}
+                );
+              })}
             </section>
           );
         })}

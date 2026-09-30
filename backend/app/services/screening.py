@@ -5,9 +5,11 @@ from datetime import timezone
 from sqlalchemy.orm import Session
 
 from app.models.screenings import ScreeningORM
+from app.repositories.halls import HallRepository
 from app.repositories.movies import MovieRepository
 from app.repositories.screenings import ScreeningRepository
 from app.schemas.screenings import ScreeningAddSchema, ScreeningResponseSchema
+
 
 
 class ScreeningNotFound(Exception): ...
@@ -23,6 +25,7 @@ class ScreeningService:
         self.db = db
         self.repo = ScreeningRepository(db)
         self.movie_repo = MovieRepository(db)
+        self.hall_repo = HallRepository(db)
 
     def list_by_date(self, target: date) -> list[ScreeningResponseSchema]:
         return [self._to_schema(s) for s in self.repo.get_by_date(target)]
@@ -123,12 +126,14 @@ class ScreeningService:
 
     def _to_schema(self, s: ScreeningORM) -> ScreeningResponseSchema:
         movie = self.movie_repo.get_by_id(s.movie_id)
+        hall = self.hall_repo.get_by_id(s.hall_id)
         return ScreeningResponseSchema(
             id=s.id,
             movie_id=s.movie_id,
             hall_id=s.hall_id,
             datetime_start=s.datetime_start,
             datetime_end=s.datetime_start + timedelta(minutes=movie.duration),  # type: ignore[union-attr]
+            hall_number=hall.number if hall else 0,
         )
 
     @staticmethod
