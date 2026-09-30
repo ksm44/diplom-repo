@@ -15,8 +15,12 @@ class HallRepository:
     def get_by_id(self, hall_id: UUID) -> HallORM | None:
         return self.db.get(HallORM, hall_id) # type: ignore[return-value]
 
-    def create(self) -> HallORM:
-        new_hall = HallORM(number=self._next_number())
+    def create(self, rows: int, cols: int) -> HallORM:
+        new_hall = HallORM(
+            number=self._next_number(),
+            rows=rows,
+            cols=cols,
+        )
         self.db.add(new_hall)
         self.db.flush() # ← отправляет INSERT, БД генерирует id
         self.db.refresh(new_hall)  # ← подтягивает сгенерированный id в объект

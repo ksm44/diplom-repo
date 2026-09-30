@@ -16,6 +16,9 @@ class HallORM(Base):
     price_vip: Mapped[int] = mapped_column(default=600)
     is_active: Mapped[bool] = mapped_column(default=False) # открытие/приостановка продажи билетов
 
+    rows: Mapped[int] = mapped_column(default=10)   # рядов в Зале
+    cols: Mapped[int] = mapped_column(default=8)    # мест в ряду Зала
+
     seats: Mapped[list["SeatORM"]] = relationship(
         back_populates="hall",
         cascade="all, delete-orphan", # Кресла, отвязанные от Зала, удалятся (orphan - с англ. сирота)

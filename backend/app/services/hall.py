@@ -26,10 +26,18 @@ class HallService:
         hall = self.hall_repository.get_by_number(number)
         if not hall:
             raise HallNotFound(f"Зал с номером {number} не найден")
-        return HallWithSeatsSchema.model_validate(hall)
+
+        seats = hall.seats
+        rows = max((s.row for s in seats), default=0)
+        cols = max((s.number for s in seats), default=0)
+
+        schema = HallWithSeatsSchema.model_validate(hall)
+        schema.rows = rows
+        schema.cols = cols
+        return schema
 
     def create_hall(self, hall_add: HallAddSchema) -> HallSchema:
-        hall = self.hall_repository.create()
+        hall = self.hall_repository.create(rows=hall_add.rows, cols=hall_add.cols)
         self.db.flush()
 
         seats = [

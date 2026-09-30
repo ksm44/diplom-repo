@@ -31,26 +31,14 @@ const SEANCES = [
   },
 ];
 
-// Схема зала (10 рядов × 8 мест). vip — позиции, как в макете.
-const HALL_ROWS = [
-  ['disabled', 'disabled', 'disabled', 'standart', 'standart', 'disabled', 'disabled', 'disabled'],
-  ['disabled', 'disabled', 'standart', 'standart', 'standart', 'standart', 'disabled', 'disabled'],
-  ['disabled', 'standart', 'standart', 'standart', 'standart', 'standart', 'standart', 'disabled'],
-  ['standart', 'standart', 'standart', 'vip', 'vip', 'standart', 'standart', 'disabled'],
-  ['standart', 'standart', 'vip', 'vip', 'vip', 'vip', 'standart', 'disabled'],
-  ['standart', 'standart', 'vip', 'vip', 'vip', 'vip', 'standart', 'disabled'],
-  ['standart', 'standart', 'vip', 'vip', 'vip', 'vip', 'standart', 'disabled'],
-  ['standart', 'standart', 'standart', 'standart', 'standart', 'standart', 'standart', 'disabled'],
-  ['standart', 'standart', 'standart', 'standart', 'standart', 'standart', 'standart', 'standart'],
-  ['standart', 'standart', 'standart', 'standart', 'standart', 'standart', 'standart', 'standart'],
-];
-
 export default function AdminDashboardPage() {
 
 
   const [rows, setRows] = useState(10);
   const [cols, setCols] = useState(8);
   const [halls, setHalls] = useState([]);
+
+  const [selectedHall, setSelectedHall] = useState(null);
 
   //Получение Залов
   function loadHalls() {
@@ -60,6 +48,12 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     loadHalls();
   }, []);
+
+  useEffect(() => {
+    if (halls.length > 0 && !selectedHall) {
+      loadHall(halls[0].number);
+    }
+  }, [halls]);
 
   //Создание нового Зала
   async function handleCreateHall() {
@@ -81,6 +75,17 @@ export default function AdminDashboardPage() {
     } catch {
       alert('Не удалось удалить зал');
     }
+  }
+
+  //Функция загрузки схемы Зала (ряды, мест в ряду, виды кресел и т.д)
+  async function loadHall(hallNumber) {
+    apiGet(`/halls/${hallNumber}`)
+      .then((data) => {
+        setSelectedHall(data);
+        setRows(data.rows);
+        setCols(data.cols);
+      })
+      .catch(() => alert('Не удалось загрузить зал'));
   }
 
   return (
@@ -121,7 +126,8 @@ export default function AdminDashboardPage() {
                   className="conf-step__radio"
                   name="chairs-hall"
                   value={hall.id}
-                  defaultChecked={i === 0}
+                  checked={selectedHall?.number === hall.number}
+                  onChange={() => loadHall(hall.number)}
                 />
                 <span className="conf-step__selector">{hall.number}</span>
               </li>
@@ -164,21 +170,33 @@ export default function AdminDashboardPage() {
               Чтобы изменить вид кресла, нажмите по нему левой кнопкой мыши
             </p>
           </div>
-
-          <div className="conf-step__hall">
-            <div className="conf-step__hall-wrapper">
-              {HALL_ROWS.map((row, rowIdx) => (
-                <div className="conf-step__row" key={rowIdx}>
-                  {row.map((type, seatIdx) => (
-                    <span
-                      key={seatIdx}
-                      className={`conf-step__chair conf-step__chair_${type}`}
-                    />
-                  ))}
-                </div>
-              ))}
+          
+          {selectedHall && (
+            <div className="conf-step__hall">
+              <div className="conf-step__hall-wrapper">
+                {Array.from({ length: selectedHall.rows }).map((_, rowIdx) => (
+                  <div className="conf-step__row" key={rowIdx}>
+                    {selectedHall.seats
+                      .filter((s) => s.row === rowIdx + 1)
+                      .sort((a, b) => a.number - b.number)
+                      .map((seat) => {
+                        const cls = seat.is_blocked
+                          ? 'disabled'
+                          : seat.kind === 'vip'
+                          ? 'vip'
+                          : 'standart';
+                        return (
+                          <span
+                            key={seat.id}
+                            className={`conf-step__chair conf-step__chair_${cls}`}
+                          />
+                        );
+                      })}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <fieldset className="conf-step__buttons text-center">
             <button className="conf-step__button conf-step__button-regular">Отмена</button>
