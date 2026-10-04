@@ -8,6 +8,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # для статики
 RUN mkdir -p /code/static/qrcodes
 
+# для сохранения постеров(картинок) фильмов
+RUN mkdir -p /code/static/posters
+
+
 COPY backend/app/ ./app
 
 EXPOSE 8000

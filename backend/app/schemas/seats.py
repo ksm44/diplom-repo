@@ -1,5 +1,5 @@
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.seats import SeatKind
 
@@ -10,14 +10,16 @@ class SeatSchema(BaseModel):
     number: int
     kind: SeatKind
     is_blocked: bool
-    # is_booked: bool удалил, т.к. бронь кресла теперь проверяется через tickets
 
-class SeatUpdateItem(BaseModel):
-    """Одно кресло в пакетном обновлении."""
-    id: UUID
-    kind: SeatKind
-    is_blocked: bool
+class SeatItemSchema(BaseModel):
+    row: int
+    number: int
+    kind: SeatKind = SeatKind.STANDARD
+    is_blocked: bool = False
+
 
 class SeatsBulkUpdateSchema(BaseModel):
-    """Тело PATCH /halls/{number}/seats — всё, что админ накликал."""
-    seats: list[SeatUpdateItem]
+    """Для тела PATCH /halls/{number}/seats — всё, что админ накликал."""
+    rows: int = Field(gt=0, le=50)
+    cols: int = Field(gt=0, le=50)
+    seats: list[SeatItemSchema] = []  # только VIP/заблокированные

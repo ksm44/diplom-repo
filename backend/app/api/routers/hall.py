@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.schemas.halls import HallSchema, HallAddSchema, HallWithSeatsSchema, HallPricesUpdateSchema
 from app.api.dependencies import get_hall_service, require_admin, get_current_user
-from app.services.hall import HallService, HallNotFound, SeatNotFound
+from app.services.hall import HallService, HallNotFound, SeatNotFound, HallHasTickets
 from app.schemas.seats import SeatsBulkUpdateSchema
 
 router = APIRouter(prefix="/halls", tags=["Залы кинотеатра"])
@@ -41,6 +41,8 @@ def bulk_update_seats(
         return service.bulk_update_seats(number, payload)
     except (HallNotFound, SeatNotFound) as e:
         raise HTTPException(404, detail=str(e))
+    except HallHasTickets as e:
+        raise HTTPException(409, detail=str(e))
 
 @router.patch("/{number}/activate", dependencies=[Depends(require_admin)])
 def toggle_active(number: int, service: HallService = Depends(get_hall_service)) -> HallSchema:

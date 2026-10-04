@@ -19,3 +19,6 @@ class MovieAddSchema(MovieBase):
 class MovieResponseSchema(MovieBase):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
+
+class PosterUploadResponse(BaseModel):
+    poster_url: str

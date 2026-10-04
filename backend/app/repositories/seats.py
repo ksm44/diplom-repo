@@ -29,3 +29,8 @@ class SeatRepository:
     def get_by_ids(self, seat_ids: list[UUID]) -> list[SeatORM]:
         """Один SELECT ... WHERE id IN (...) вместо N запросов."""
         return list(self.db.scalars(select(SeatORM).where(SeatORM.id.in_(seat_ids))).all())
+
+    def delete_by_hall(self, hall_id: UUID) -> None:
+        self.db.query(SeatORM).filter(SeatORM.hall_id == hall_id).delete(
+            synchronize_session=False
+        )

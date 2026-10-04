@@ -17,7 +17,7 @@ module.exports = {
     port: 3000, //куда стучаться во front-end (куда направлять запросы)
     historyApiFallback: true, // для SPA: все неизвестные пути → index.html
     hot: true,
-    proxy: [{ context: ["/api"],
+    proxy: [{ context: ["/api", "/static"],
       target: "http://localhost:8000",
       changeOrigin: true,
       pathRewrite: { "^/api": "" } // например при обращении в /api/movies попадём в /movies на бэкенде

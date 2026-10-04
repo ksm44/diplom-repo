@@ -2,16 +2,20 @@
 //нужно будет настроить загрузку по api movies, halls и т.д.
 
 import { useState, useEffect } from 'react';
-import { apiGet, apiPost, apiDelete } from '../../services/api';
+import { apiGet, apiPost, apiDelete, apiPatch } from '../../services/api';
 import Accordion from "../components/Accordion";
+import AddMovieModal from "../components/AddMovieModal";
 
-const MOVIES = [
-  { id: 1, title: 'Звёздные войны XXIII: Атака клонированных клонов', duration: 130 },
-  { id: 2, title: 'Миссия выполнима', duration: 120 },
-  { id: 3, title: 'Серая пантера', duration: 90 },
-  { id: 4, title: 'Движение вбок', duration: 95 },
-  { id: 5, title: 'Кот Да Винчи', duration: 100 },
-];
+import '../../styles/admin/normalize.css';
+import '../../styles/admin/styles.css';
+
+// const MOVIES = [
+//   { id: 1, title: 'Звёздные войны XXIII: Атака клонированных клонов', duration: 130 },
+//   { id: 2, title: 'Миссия выполнима', duration: 120 },
+//   { id: 3, title: 'Серая пантера', duration: 90 },
+//   { id: 4, title: 'Движение вбок', duration: 95 },
+//   { id: 5, title: 'Кот Да Винчи', duration: 100 },
+// ];
 
 const SEANCES = [
   {
@@ -38,12 +42,17 @@ export default function AdminDashboardPage() {
   const [cols, setCols] = useState(8);
   const [halls, setHalls] = useState([]);
 
-  const [selectedHall, setSelectedHall] = useState(null);
+  const [selectedHall, setSelectedHall] = useState(null); // исходные данные из API
+  const [draftSeats, setDraftSeats] = useState([]); // редактируемая локальная копия данных
 
-  //Получение Залов
-  function loadHalls() {
-    apiGet('/halls').then(setHalls).catch(() => alert('Не удалось загрузить залы'));
-  }
+  //Состояния цен
+  const [priceStandard, setPriceStandard] = useState('');
+  const [priceVip, setPriceVip] = useState('');
+  const [selectedPriceHall, setSelectedPriceHall] = useState(null); // для какого зала сохранять цены
+
+  //Фильмы
+  const [movies, setMovies] = useState([]);
+  const [showAddMovie, setShowAddMovie] = useState(false);
 
   useEffect(() => {
     loadHalls();
@@ -55,11 +64,54 @@ export default function AdminDashboardPage() {
     }
   }, [halls]);
 
+  useEffect(() => {
+    if (!selectedHall) return;
+    setDraftSeats((prev) =>
+        prev.filter((s) => s.row <= Number(rows) && s.number <= Number(cols))
+    );
+  }, [rows, cols]);
+
+  useEffect(() => { // Автовыбор первого зала для отображения цен
+    if (halls.length > 0 && !priceStandard && !priceVip) {
+      handlePriceHallChange(halls[0]);
+    }
+  }, [halls]);
+
+  useEffect(() => { loadMovies(); }, []);
+
+  //Получение Залов
+  function loadHalls() {
+    apiGet('/halls').then(setHalls).catch(() => alert('Не удалось загрузить залы'));
+
+  }
+
+  // Заполнение цен при выборе зала
+  function handlePriceHallChange(hall) {
+    setPriceStandard(hall.price_standard);
+    setPriceVip(hall.price_vip);
+
+  }
+
+  //Отмена введенных цен
+  function resetPrices() {
+    if (!selectedPriceHall) return;
+    apiGet('/halls').then((data) => {
+      setHalls(data);
+      const fresh = data.find((h) => h.id === selectedPriceHall.id);
+      if (fresh) handlePriceHallChange(fresh);
+    });
+  }
+
+  //Добавление нового фильма в БД
+  function loadMovies() {
+    apiGet('/movies').then(setMovies).catch(() => alert('Не удалось загрузить фильмы'));
+  }
+
   //Создание нового Зала
   async function handleCreateHall() {
     try {
-      await apiPost('/halls', { rows: Number(rows), cols: Number(cols) });
-      loadHalls(); // ← обновляем список
+      await apiPost('/halls', { rows: 10, cols: 8 });
+      loadHalls();
     } catch {
       alert('Не удалось создать зал');
     }
@@ -82,10 +134,84 @@ export default function AdminDashboardPage() {
     apiGet(`/halls/${hallNumber}`)
       .then((data) => {
         setSelectedHall(data);
+        setDraftSeats(data.seats.map((s) => ({ ...s }))); // копия
         setRows(data.rows);
         setCols(data.cols);
       })
       .catch(() => alert('Не удалось загрузить зал'));
+  }
+
+  //Обработчик клика по креслу
+  function handleSeatClick(row, number) {
+    setDraftSeats((prev) => {
+      const existing = prev.find((s) => s.row === row && s.number === number);
+      const base = existing || { row, number, kind: 'standard', is_blocked: false };
+
+      let next;
+      if (base.is_blocked) {
+        next = { ...base, is_blocked: false, kind: 'standard' };
+      } else if (base.kind === 'standard') {
+        next = { ...base, kind: 'vip' };
+      } else {
+        next = { ...base, kind: 'standard', is_blocked: true };
+      }
+
+      // если кресло уже было в списке — обновляем, иначе добавляем
+      if (existing) {
+        return prev.map((s) =>
+          s.row === row && s.number === number ? next : s
+        );
+      }
+      return [...prev, next];
+    });
+  }
+
+  //Сохраняем изменения кресел — отправка изменений кресел на бэкенд
+  async function handleSaveSeats() {
+    if (!selectedHall) return;
+
+    const currentRows = Number(rows);
+    const currentCols = Number(cols);
+
+    // строим полную сетку, накладывая draftSeats
+    const fullSeats = [];
+    for (let r = 1; r <= currentRows; r++) {
+      for (let n = 1; n <= currentCols; n++) {
+        const existing = draftSeats.find((s) => s.row === r && s.number === n);
+        fullSeats.push(
+          existing
+            ? { row: r, number: n, kind: existing.kind, is_blocked: existing.is_blocked }
+            : { row: r, number: n, kind: 'standard', is_blocked: false }
+        );
+      }
+    }
+
+    try {
+      await apiPatch(`/halls/${selectedHall.number}/seats`, {
+        rows: currentRows,
+        cols: currentCols,
+        seats: fullSeats,
+      });
+      await loadHall(selectedHall.number);
+    } catch {
+      alert('Не удалось сохранить/изменить схему зала.' +
+          '\n\nНельзя изменить схему зала, пока в нём есть сеансы.' +
+          '\n\nПопробуйте удалить и создать зал заново ');
+    }
+  }
+
+  //Обработчик сохранения цен
+  async function handleSavePrices() {
+    if (!selectedPriceHall) return;
+    try {
+      await apiPatch(`/halls/${selectedPriceHall.number}/prices`, {
+        price_standard: Number(priceStandard),
+        price_vip: Number(priceVip),
+      });
+      loadHalls();
+    } catch {
+      alert('Не удалось сохранить цены');
+    }
   }
 
   return (
@@ -174,24 +300,28 @@ export default function AdminDashboardPage() {
           {selectedHall && (
             <div className="conf-step__hall">
               <div className="conf-step__hall-wrapper">
-                {Array.from({ length: selectedHall.rows }).map((_, rowIdx) => (
+                {Array.from({ length: Number(rows) }).map((_, rowIdx) => (
                   <div className="conf-step__row" key={rowIdx}>
-                    {selectedHall.seats
-                      .filter((s) => s.row === rowIdx + 1)
-                      .sort((a, b) => a.number - b.number)
-                      .map((seat) => {
-                        const cls = seat.is_blocked
-                          ? 'disabled'
-                          : seat.kind === 'vip'
-                          ? 'vip'
-                          : 'standart';
-                        return (
-                          <span
-                            key={seat.id}
-                            className={`conf-step__chair conf-step__chair_${cls}`}
-                          />
-                        );
-                      })}
+                    {Array.from({ length: Number(cols) }).map((_, seatIdx) => {
+                      const r = rowIdx + 1;
+                      const n = seatIdx + 1;
+                      const seat = draftSeats.find((s) => s.row === r && s.number === n);
+                      const cls = !seat
+                        ? 'standart'                            // новое место — стандартное
+                        : seat.is_blocked
+                        ? 'disabled'
+                        : seat.kind === 'vip'
+                        ? 'vip'
+                        : 'standart';
+                      return (
+                        <span
+                          key={`${r}-${n}`}
+                          className={`conf-step__chair conf-step__chair_${cls}`}
+                          onClick={() => handleSeatClick(r, n)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      );
+                    })}
                   </div>
                 ))}
               </div>
@@ -199,8 +329,18 @@ export default function AdminDashboardPage() {
           )}
 
           <fieldset className="conf-step__buttons text-center">
-            <button className="conf-step__button conf-step__button-regular">Отмена</button>
-            <input type="submit" value="Сохранить" className="conf-step__button conf-step__button-accent" />
+            <button
+              className="conf-step__button conf-step__button-regular"
+              onClick={() => loadHall(selectedHall.number)}
+            >
+              Отмена
+            </button>
+            <input
+              type="submit"
+              value="Сохранить"
+              className="conf-step__button conf-step__button-accent"
+              onClick={handleSaveSeats}
+            />
           </fieldset>
         </Accordion>
 
@@ -215,7 +355,11 @@ export default function AdminDashboardPage() {
                   className="conf-step__radio"
                   name="prices-hall"
                   value={hall.id}
-                  defaultChecked={i === 1}
+                  checked={selectedPriceHall?.id === hall.id}
+                  onChange={() => {
+                    setSelectedPriceHall(hall);
+                    handlePriceHallChange(hall);
+                  }}
                 />
                 <span className="conf-step__selector">Зал {hall.number}</span>
               </li>
@@ -225,33 +369,61 @@ export default function AdminDashboardPage() {
           <p className="conf-step__paragraph">Установите цены для типов кресел:</p>
           <div className="conf-step__legend">
             <label className="conf-step__label">
-              Цена, рублей<input type="text" className="conf-step__input" placeholder="0" />
+              Цена, рублей
+              <input
+                type="text"
+                className="conf-step__input"
+                placeholder="0"
+                value={priceStandard}
+                onChange={(e) => setPriceStandard(e.target.value)}
+              />
             </label>
             за <span className="conf-step__chair conf-step__chair_standart" /> обычные кресла
           </div>
           <div className="conf-step__legend">
             <label className="conf-step__label">
-              Цена, рублей<input type="text" className="conf-step__input" placeholder="0" defaultValue="350" />
+              Цена, рублей
+              <input
+                type="text"
+                className="conf-step__input"
+                placeholder="0"
+                value={priceVip}
+                onChange={(e) => setPriceVip(e.target.value)}
+              />
             </label>
             за <span className="conf-step__chair conf-step__chair_vip" /> VIP кресла
           </div>
 
           <fieldset className="conf-step__buttons text-center">
-            <button className="conf-step__button conf-step__button-regular">Отмена</button>
-            <input type="submit" value="Сохранить" className="conf-step__button conf-step__button-accent" />
+            <button className="conf-step__button conf-step__button-regular"
+              onClick={() => {
+                resetPrices();
+              }}
+            >Отмена</button>
+            <input
+              type="submit"
+              value="Сохранить"
+              className="conf-step__button conf-step__button-accent"
+              onClick={handleSavePrices}
+            />
           </fieldset>
         </Accordion>
 
         {/* 4. Сетка сеансов */}
         <Accordion title="Сетка сеансов" opened>
           <p className="conf-step__paragraph">
-            <button className="conf-step__button conf-step__button-accent">Добавить фильм</button>
+            <button
+              className="conf-step__button conf-step__button-accent"
+              onClick={() => setShowAddMovie(true)}
+            >
+              Добавить фильм
+            </button>
           </p>
 
           <div className="conf-step__movies">
-            {MOVIES.map((m) => (
+            {movies.map((m) => (
               <div className="conf-step__movie" key={m.id}>
-                <div className="conf-step__movie-poster" />
+                <img className="conf-step__movie-poster" src={m.poster_url} alt={m.title} />
                 <h3 className="conf-step__movie-title">{m.title}</h3>
                 <p className="conf-step__movie-duration">{m.duration} минут</p>
               </div>
@@ -299,6 +471,13 @@ export default function AdminDashboardPage() {
         </Accordion>
 
       </main>
+
+      {showAddMovie && (
+        <AddMovieModal
+          onClose={() => setShowAddMovie(false)}
+          onCreated={loadMovies}
+        />
+      )}
     </>
   );
 }

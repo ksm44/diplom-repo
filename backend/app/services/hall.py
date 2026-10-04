@@ -1,8 +1,11 @@
+from uuid import UUID
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.repositories.halls import HallRepository
 from app.schemas.halls import HallSchema, HallWithSeatsSchema, HallAddSchema, HallPricesUpdateSchema
-from app.models.seats import SeatORM
+from app.models.seats import SeatORM, SeatKind
 from app.repositories.seats import SeatRepository
 from app.schemas.seats import SeatsBulkUpdateSchema
 
@@ -11,6 +14,9 @@ class HallNotFound(Exception):
     """Зал не найден в БД"""
 class SeatNotFound(Exception):
     """Место(кресло) не найдено в БД"""
+class HallHasTickets(Exception):
+    """В зале есть проданные билеты — схему зала менять нельзя!"""
+
 
 class HallService:
     def __init__(self, db: Session) -> None:
@@ -56,21 +62,43 @@ class HallService:
         if not hall:
             raise HallNotFound(f"Зал {number} не найден")
 
-        # один запрос за всеми креслами по списку id
-        ids = [item.id for item in data.seats]
-        seats = {s.id: s for s in self.seat_repository.get_by_ids(ids)}
+        if self._hall_has_tickets(hall.id):
+            raise HallHasTickets("Нельзя менять схему зала с проданными билетами")
 
-        # применяем изменения
-        for item in data.seats:
-            seat = seats.get(item.id)
-            if seat is None or seat.hall_id != hall.id:
-                raise SeatNotFound(f"Кресло {item.id} не в зале {number}")
-            seat.kind = item.kind
-            seat.is_blocked = item.is_blocked
+        # удаляем старые кресла
+        self.seat_repository.delete_by_hall(hall.id)
+
+        # обновляем размеры
+        hall.rows = data.rows
+        hall.cols = data.cols
+
+        # генерируем новые кресла с оверрайдами
+        overrides = {(s.row, s.number): s for s in data.seats}
+        seats = []
+        for r in range(1, data.rows + 1):
+            for n in range(1, data.cols + 1):
+                o = overrides.get((r, n))
+                seats.append(SeatORM(
+                    hall_id=hall.id,
+                    row=r,
+                    number=n,
+                    kind=o.kind if o else SeatKind.STANDARD,
+                    is_blocked=o.is_blocked if o else False,
+                ))
+        self.seat_repository.create_many(seats)
 
         self.db.commit()
         self.db.refresh(hall)
         return HallWithSeatsSchema.model_validate(hall)
+
+    def _hall_has_tickets(self, hall_id: UUID) -> bool:
+        from app.models.tickets import TicketSeatORM
+        return self.db.scalar(
+            select(TicketSeatORM.seat_id)
+            .join(SeatORM, SeatORM.id == TicketSeatORM.seat_id)
+            .where(SeatORM.hall_id == hall_id)
+            .limit(1)
+        ) is not None
 
     def update_prices(self, number: int, data: HallPricesUpdateSchema) -> HallSchema:
         hall = self.hall_repository.get_by_number(number)
