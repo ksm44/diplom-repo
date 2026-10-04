@@ -1,10 +1,11 @@
 // покачто тут заглушка с моковыми данными
 //нужно будет настроить загрузку по api movies, halls и т.д.
 
-import { useState, useEffect } from 'react';
-import { apiGet, apiPost, apiDelete, apiPatch } from '../../services/api';
+import { useState, useEffect, useMemo } from 'react';
+import { apiGet, apiPost, apiDelete, apiPatch, apiPut } from '../../services/api';
 import Accordion from "../components/Accordion";
 import AddMovieModal from "../components/AddMovieModal";
+import AddScreeningModal from '../components/AddScreeningModal';
 
 import '../../styles/admin/normalize.css';
 import '../../styles/admin/styles.css';
@@ -17,26 +18,27 @@ import '../../styles/admin/styles.css';
 //   { id: 5, title: 'Кот Да Винчи', duration: 100 },
 // ];
 
-const SEANCES = [
-  {
-    hall: 'Зал 1',
-    items: [
-      { title: 'Миссия выполнима', start: '00:00', width: 60, left: 0, color: 'rgb(133, 255, 137)' },
-      { title: 'Миссия выполнима', start: '12:00', width: 60, left: 360, color: 'rgb(133, 255, 137)' },
-      { title: 'Звёздные войны XXIII: Атака клонированных клонов', start: '14:00', width: 65, left: 420, color: 'rgb(202, 255, 133)' },
-    ],
-  },
-  {
-    hall: 'Зал 2',
-    items: [
-      { title: 'Звёздные войны XXIII: Атака клонированных клонов', start: '19:50', width: 65, left: 595, color: 'rgb(202, 255, 133)' },
-      { title: 'Миссия выполнима', start: '22:00', width: 60, left: 660, color: 'rgb(133, 255, 137)' },
-    ],
-  },
-];
+// const SEANCES = [
+//   {
+//     hall: 'Зал 1',
+//     items: [
+//       { title: 'Миссия выполнима', start: '00:00', width: 60, left: 0, color: 'rgb(133, 255, 137)' },
+//       { title: 'Миссия выполнима', start: '12:00', width: 60, left: 360, color: 'rgb(133, 255, 137)' },
+//       { title: 'Звёздные войны XXIII: Атака клонированных клонов', start: '14:00', width: 65, left: 420, color: 'rgb(202, 255, 133)' },
+//     ],
+//   },
+//   {
+//     hall: 'Зал 2',
+//     items: [
+//       { title: 'Звёздные войны XXIII: Атака клонированных клонов', start: '19:50', width: 65, left: 595, color: 'rgb(202, 255, 133)' },
+//       { title: 'Миссия выполнима', start: '22:00', width: 60, left: 660, color: 'rgb(133, 255, 137)' },
+//     ],
+//   },
+// ];
 
 export default function AdminDashboardPage() {
 
+  const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
 
   const [rows, setRows] = useState(10);
   const [cols, setCols] = useState(8);
@@ -53,6 +55,18 @@ export default function AdminDashboardPage() {
   //Фильмы
   const [movies, setMovies] = useState([]);
   const [showAddMovie, setShowAddMovie] = useState(false);
+
+  //Сеансы
+  const [showAddScreening, setShowAddScreening] = useState(false);
+  const [movieForScreening, setMovieForScreening] = useState(null);
+  const [screenings, setScreenings] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(toLocalDateStr(new Date()));
+  const [draftScreenings, setDraftScreenings] = useState([]);   // редактируемая копия
+  const [setScreeningsDirty] = useState(false);
+
+
+  // Длина px на минуту (под макет: 60px = ~1 час → 1 px/мин)
+  const PX_PER_MIN = 1;
 
   useEffect(() => {
     loadHalls();
@@ -78,6 +92,58 @@ export default function AdminDashboardPage() {
   }, [halls]);
 
   useEffect(() => { loadMovies(); }, []);
+
+  useEffect(() => { loadScreenings(selectedDate); }, [selectedDate]);
+
+  //Группировка сеансов
+  const groupedScreenings = useMemo(() => {
+    const byHall = new Map();
+    for (const s of draftScreenings) {
+      if (!byHall.has(s.hall_number)) byHall.set(s.hall_number, []);
+      byHall.get(s.hall_number).push(s);
+    }
+    for (const arr of byHall.values()) {
+      arr.sort((a, b) => new Date(a.datetime_start) - new Date(b.datetime_start));
+    }
+    return [...byHall.entries()].sort(([a], [b]) => a - b);
+  }, [draftScreenings]);
+
+  const days = useMemo(buildDays, []);
+
+  function formatTime(iso) {
+    const d = new Date(new Date(iso).getTime() + MSK_OFFSET_MS);
+    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  }
+
+  // следующие 7 дней, начиная с сегодня (по МСК)
+  function buildDays() {
+    const now = new Date();
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
+      const msk = new Date(d.getTime() + MSK_OFFSET_MS);
+      const iso = `${msk.getUTCFullYear()}-${String(msk.getUTCMonth() + 1).padStart(2, '0')}-${String(msk.getUTCDate()).padStart(2, '0')}`;
+      const weekday = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][msk.getUTCDay()];
+      return { iso, label: `${String(msk.getUTCDate()).padStart(2,'0')}.${String(msk.getUTCMonth()+1).padStart(2,'0')}.${msk.getUTCFullYear()}, ${weekday}` };
+    });
+  }
+
+  // при загрузке с бэка — заполняем и копию
+  function loadScreenings(date = selectedDate) {
+    const params = new URLSearchParams({ date_screening: date });
+
+    apiGet(`/screenings?${params.toString()}`)
+      .then((data) => {
+        setScreenings(data);
+        setDraftScreenings(data.map((s) => ({ ...s })));
+      })
+      .catch(() => alert('Не удалось загрузить сеансы'));
+  }
+
+
+  function minutesFromDayStart(iso) {
+    const d = new Date(new Date(iso).getTime() + MSK_OFFSET_MS);
+    return d.getUTCHours() * 60 + d.getUTCMinutes();
+  }
 
   //Получение Залов
   function loadHalls() {
@@ -105,6 +171,15 @@ export default function AdminDashboardPage() {
   //Добавление нового фильма в БД
   function loadMovies() {
     apiGet('/movies').then(setMovies).catch(() => alert('Не удалось загрузить фильмы'));
+  }
+
+  //Дата (для правильного формата запроса сеансов)
+  function toLocalDateStr(d) {
+    const msk = new Date(d.getTime() + MSK_OFFSET_MS);
+    const y = msk.getUTCFullYear();
+    const m = String(msk.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(msk.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   //Создание нового Зала
@@ -166,6 +241,19 @@ export default function AdminDashboardPage() {
     });
   }
 
+  //Получение цвета фона фильмов
+  function getMovieColor(index) {
+    const baseHue = 50;
+    const degrees = 48;
+    const hue = (baseHue + index * degrees) % 360;
+    return `hsl(${hue}, 100%, 76%)`;
+  }
+
+  function handleAddScreening(newScreening) {
+    setDraftScreenings((prev) => [...prev, newScreening]);
+  }
+
+
   //Сохраняем изменения кресел — отправка изменений кресел на бэкенд
   async function handleSaveSeats() {
     if (!selectedHall) return;
@@ -211,6 +299,36 @@ export default function AdminDashboardPage() {
       loadHalls();
     } catch {
       alert('Не удалось сохранить цены');
+    }
+  }
+
+  //Сохранение сеансов в разделе «Сетка сеансов»
+  async function handleSaveScreenings() {
+    const now = Date.now();
+    const payload = draftScreenings
+      .filter((s) => new Date(s.datetime_start).getTime() > now)
+      .map((s) => {
+        if (String(s.id).startsWith('temp-')) {
+          const { id, ...rest } = s;
+          return rest;
+        }
+        return s;
+      });
+    try {
+      await apiPut(`/screenings?date_screening=${selectedDate}`, payload);
+      loadScreenings(selectedDate);
+    } catch {
+      alert('Не удалось сохранить сеансы');
+    }
+  }
+
+  //Открыть/приостановить продажи
+  async function toggleHallActive(hall) {
+    try {
+      await apiPatch(`/halls/${hall.number}/activate`);
+      loadHalls();
+    } catch {
+      alert('Не удалось изменить статус продаж');
     }
   }
 
@@ -422,60 +540,129 @@ export default function AdminDashboardPage() {
 
           <div className="conf-step__movies">
             {movies.map((m) => (
-              <div className="conf-step__movie" key={m.id}>
+              <div
+                className="conf-step__movie"
+                key={m.id}
+                onClick={() => { setMovieForScreening(m); setShowAddScreening(true); }}
+                style={{ cursor: 'pointer' }}
+              >
                 <img className="conf-step__movie-poster" src={m.poster_url} alt={m.title} />
                 <h3 className="conf-step__movie-title">{m.title}</h3>
                 <p className="conf-step__movie-duration">{m.duration} минут</p>
               </div>
             ))}
           </div>
+          <div className="conf-step__dates-box">
+            <p className="conf-step__paragraph">Выберите дату:</p>
+            <ul className="conf-step__selectors-box">
+              {days.map((d) => (
+                <li
+                  key={d.iso}
+                  onClick={() => setSelectedDate(d.iso)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <input
+                    type="radio"
+                    className="conf-step__radio"
+                    name="screening-date"
+                    value={d.iso}
+                    checked={selectedDate === d.iso}
+                    onChange={() => setSelectedDate(d.iso)}
+                  />
+                  <span className="conf-step__selector">{d.label}</span>
+                </li>
+              ))}
+            </ul>
 
-          <div className="conf-step__seances">
-            {SEANCES.map((s) => (
-              <div className="conf-step__seances-hall" key={s.hall}>
-                <h3 className="conf-step__seances-title">{s.hall}</h3>
-                <div className="conf-step__seances-timeline">
-                  {s.items.map((item, i) => (
-                    <div
-                      className="conf-step__seances-movie"
-                      key={i}
-                      style={{
-                        width: `${item.width}px`,
-                        left: `${item.left}px`,
-                        backgroundColor: item.color,
-                      }}
-                    >
-                      <p className="conf-step__seances-movie-title">{item.title}</p>
-                      <p className="conf-step__seances-movie-start">{item.start}</p>
-                    </div>
-                  ))}
+            <div className="conf-step__seances">
+              {groupedScreenings.map(([hallNumber, items]) => (
+                <div className="conf-step__seances-hall" key={hallNumber}>
+                  <h3 className="conf-step__seances-title">Зал {hallNumber}</h3>
+                  <div className="conf-step__seances-timeline">
+                    {items.map((s) => {
+                      const movie = movies.find((m) => m.id === s.movie_id);
+                      const movieIndex = movies.findIndex((m) => m.id === s.movie_id);
+                      const bg = getMovieColor(movieIndex >= 0 ? movieIndex : 0);
+                      const start = new Date(s.datetime_start);
+                      const end = new Date(s.datetime_end);
+                      const durationMin = (end - start) / 60000;
+                      const width = durationMin * PX_PER_MIN;
+                      const left = minutesFromDayStart(s.datetime_start) * PX_PER_MIN;
+                      return (
+                        <div
+                          className="conf-step__seances-movie"
+                          key={s.id}
+                          style={{
+                            width: `${width}px`,
+                            left: `${left}px`,
+                            backgroundColor: bg,
+                          }}
+                          title={movie ? movie.title : ''}
+                        >
+                          <p className="conf-step__seances-movie-title">
+                            {movie ? movie.title : '—'}
+                          </p>
+                          <p className="conf-step__seances-movie-start">
+                            {formatTime(s.datetime_start)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-
           <fieldset className="conf-step__buttons text-center">
-            <button className="conf-step__button conf-step__button-regular">Отмена</button>
-            <input type="submit" value="Сохранить" className="conf-step__button conf-step__button-accent" />
+            <button
+              className="conf-step__button conf-step__button-regular"
+              onClick={() => setDraftScreenings(screenings.map((s) => ({ ...s })))}
+            >
+              Отмена
+            </button>
+            <input type="submit" value="Сохранить" className="conf-step__button conf-step__button-accent"
+              onClick={handleSaveScreenings}
+            />
           </fieldset>
         </Accordion>
 
         {/* 5. Открыть продажи */}
         <Accordion title="Открыть продажи" opened>
-          <div className="text-center">
-            <p className="conf-step__paragraph">Всё готово, теперь можно:</p>
-            <button className="conf-step__button conf-step__button-accent">
-              Открыть продажу билетов
-            </button>
-          </div>
+          <p className="conf-step__paragraph">Всё готово, теперь можно:</p>
+          <ul className="conf-step__sales-list">
+            {halls.map((hall) => (
+              <li key={hall.id}>
+                <span>
+                  Зал {hall.number}
+                </span>
+                <button
+                  className="conf-step__button conf-step__button-accent"
+                  onClick={() => toggleHallActive(hall)}
+                >
+                  {hall.is_active ? 'Приостановить продажу билетов' : 'Открыть продажу билетов'}
+                </button>
+              </li>
+            ))}
+          </ul>
         </Accordion>
 
       </main>
 
+      {/* Модалки (всплывающие окна) */}
       {showAddMovie && (
         <AddMovieModal
           onClose={() => setShowAddMovie(false)}
           onCreated={loadMovies}
+        />
+      )}
+
+      {showAddScreening && movieForScreening && (
+        <AddScreeningModal
+          movie={movieForScreening}
+          halls={halls}
+          selectedDate={selectedDate}
+          onAdd={handleAddScreening}
+          onClose={() => setShowAddScreening(false)}
         />
       )}
     </>

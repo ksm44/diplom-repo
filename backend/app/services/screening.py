@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.screenings import ScreeningORM
 from app.repositories.halls import HallRepository
 from app.repositories.movies import MovieRepository
-from app.repositories.screenings import ScreeningRepository
+from app.repositories.screenings import ScreeningRepository, MSK
 from app.schemas.screenings import ScreeningAddSchema, ScreeningResponseSchema
 
 
@@ -34,7 +34,7 @@ class ScreeningService:
         start = self._to_utc(data.datetime_start)
         if start <= datetime.now(timezone.utc):
             raise ScreeningInPast("Нельзя создать сеанс в прошлом")
-
+            
 
         movie = self.movie_repo.get_by_id(data.movie_id)
         if not movie:
@@ -63,6 +63,12 @@ class ScreeningService:
         # 2. проверяем новые
         to_create: list[ScreeningORM] = []
         for screening in screenings:
+            start = self._to_utc(screening.datetime_start)
+
+            # проверка "не в прошлом" — только если id не передан (новый сеанс)
+            if screening.id is None and start <= datetime.now(timezone.utc):
+                raise ScreeningInPast(f"Сеанс {start} в прошлом")
+
             movie = self.movie_repo.get_by_id(screening.movie_id)
             if not movie:
                 raise ScreeningNotFound(f"Фильм {screening.movie_id} не найден")
@@ -94,7 +100,9 @@ class ScreeningService:
 
     @staticmethod #т.к. не используется self в этом методе
     def _check_within_day(start: datetime, end: datetime) -> None:
-        if start.date() != end.date():
+        start_msk = start.astimezone(MSK)
+        end_msk = end.astimezone(MSK)
+        if start_msk.date() != end_msk.date():
             raise ScreeningOutOfDay("Сеанс не может выходить за пределы суток")
 
     def _check_overlaps(self, hall_id: UUID, start: datetime, end: datetime) -> None:

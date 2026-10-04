@@ -158,7 +158,9 @@ input[type='radio'], input[type='submit'], button, .conf-step__header, select {
 .conf-step__paragraph:not(:first-of-type) {
   margin-top: 35px; }
 
-.conf-step__list {
+.conf-step__list, .conf-step__sales-list {
+  display: flex;
+  flex-direction: column;
   list-style: none;
   font-size: 1.6rem;
   text-transform: uppercase;
@@ -172,6 +174,12 @@ input[type='radio'], input[type='submit'], button, .conf-step__header, select {
     content: '–';
     position: absolute;
     left: -14px; }
+
+.conf-step__sales-list span {
+  display: inline-block;
+  margin-right: 5px;
+  min-width: 55px;
+}
 
 .conf-step__button, .login__button {
   box-shadow: 0px 3px 3px rgba(0, 0, 0, 0.24), 0px 0px 3px rgba(0, 0, 0, 0.12);
@@ -599,3 +607,11 @@ textarea.conf-step__input {
   font-weight: 600;
 }
 /*# sourceMappingURL=styles.css.map */
+
+.conf-step__dates-box {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px 22px;
+  margin-top: 20px;
+  display: inline-block;
+}

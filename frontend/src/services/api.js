@@ -49,11 +49,12 @@ export function apiPost(path, body) {
 
 // PATCH-запрос
 export function apiPatch(path, body) {
-  return request(path, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const opts = { method: 'PATCH' };
+  if (body !== undefined) {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(body);
+  }
+  return request(path, opts);
 }
 
 // POST-запрос с multipart/form-data (для загрузки картинок постеров фильмов)
@@ -68,5 +69,14 @@ export function apiUpload(path, file) {
   }).then((r) => {
     if (!r.ok) throw new Error('Ошибка загрузки');
     return r.json();
+  });
+}
+
+// PUT-запрос
+export function apiPut(path, body) {
+  return request(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
 }

@@ -10,7 +10,7 @@ class ScreeningBase(BaseModel):
 
 # что ожидаем в запросе от пользователя (Что клиент присылает?)
 class ScreeningAddSchema(ScreeningBase):
-    pass
+    id: UUID | None = None
 
 # что ожидаем в ответе (Что сервер отдаёт?)
 class ScreeningResponseSchema(ScreeningBase):

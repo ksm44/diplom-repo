@@ -1,17 +1,21 @@
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timezone, timedelta
 from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.models.screenings import ScreeningORM
 
+MSK = timezone(timedelta(hours=3))
 
 class ScreeningRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
     def get_by_date(self, target: date) -> list[ScreeningORM]:
-        start = datetime.combine(target, time.min, tzinfo=timezone.utc)
-        end = datetime.combine(target, time.max, tzinfo=timezone.utc)
+        # границы дня в МСК, потом в UTC
+        start_msk = datetime.combine(target, time.min, tzinfo=MSK)
+        end_msk = datetime.combine(target, time.max, tzinfo=MSK)
+        start = start_msk.astimezone(timezone.utc)
+        end = end_msk.astimezone(timezone.utc)
 
         return list(
             self.db.scalars(
@@ -22,8 +26,10 @@ class ScreeningRepository:
         )
 
     def get_by_hall_and_date(self, hall_id: UUID, target: date) -> list[ScreeningORM]:
-        start = datetime.combine(target, time.min)
-        end = datetime.combine(target, time.max)
+        start_msk = datetime.combine(target, time.min, tzinfo=MSK)
+        end_msk = datetime.combine(target, time.max, tzinfo=MSK)
+        start = start_msk.astimezone(timezone.utc)
+        end = end_msk.astimezone(timezone.utc)
         return list(
             self.db.scalars(
                 select(ScreeningORM)

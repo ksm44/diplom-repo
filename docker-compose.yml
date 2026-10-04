@@ -17,6 +17,8 @@ services:
 
   backend: # сервис № 2 - приложение
     build: .
+    volumes:
+      - ./backend/app/static:/code/static
     env_file:
       - backend/.env
     environment:

@@ -117,7 +117,7 @@ export default function AddMovieModal({ onClose, onCreated }) {
                   className="conf-step__button conf-step__button-accent"
                   disabled={loading}
                 >
-                  {loading ? 'Добавление...' : 'Добавить фильм'}
+                  {loading ? 'Добавление...' : 'Создать новый фильм'}
                 </button>
               </div>
             </form>
