@@ -24,7 +24,7 @@ class ScreeningORM(Base):
 
     movie_id: Mapped[UUID] = mapped_column(ForeignKey("movies.id", ondelete="CASCADE"))
     hall_id: Mapped[UUID] = mapped_column(ForeignKey("halls.id", ondelete="CASCADE"))
-    datetime_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    datetime_start: Mapped[datetime] = mapped_column(DateTime(timezone=False))
 
     movie: Mapped["MovieORM"] = relationship()
     hall: Mapped["HallORM"] = relationship(lazy="joined", back_populates="screenings")

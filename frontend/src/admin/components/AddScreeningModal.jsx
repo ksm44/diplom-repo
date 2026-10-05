@@ -1,8 +1,5 @@
 import { useState } from 'react';
 
-// Смещение МСК (UTC+3) в миллисекундах
-const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
-
 export default function AddScreeningModal({ movie, halls, selectedDate, onAdd, onClose }) {
   const [hallId, setHallId] = useState(halls[0]?.id || '');
   const [time, setTime] = useState(''); // "HH:mm"
@@ -14,13 +11,28 @@ export default function AddScreeningModal({ movie, halls, selectedDate, onAdd, o
     setLoading(true);
 
     try {
-      // selectedDate = "YYYY-MM-DD" (МСК), time = "HH:mm" (МСК)
-      // Собираем "YYYY-MM-DDTHH:mm:00" как UTC-строку, затем вычитаем 3 часа
-      const asUtc = new Date(`${selectedDate}T${time}:00Z`);
-      const startUtc = new Date(asUtc.getTime() - MSK_OFFSET_MS);
+      const pad = (n) => String(n).padStart(2, '0');
 
-      // end = start + duration
-      const endUtc = new Date(startUtc.getTime() + movie.duration * 60000);
+      // naive-МСК: "YYYY-MM-DDTHH:mm:00"
+      const startStr = `${selectedDate}T${time}:00`;
+
+      // end = start + duration (считаем вручную, без Date, чтобы не зависеть от tz браузера)
+      const [h, mi] = time.split(':').map(Number);
+      const totalMin = h * 60 + mi + movie.duration;
+
+      // при переходе через полночь — сдвигаем дату
+      const dayOffset = Math.floor(totalMin / (24 * 60));
+      const endH = Math.floor((totalMin % (24 * 60)) / 60);
+      const endMi = totalMin % 60;
+
+      let endDate = selectedDate;
+      if (dayOffset > 0) {
+        const [y, mo, d] = selectedDate.split('-').map(Number);
+        const next = new Date(y, mo - 1, d + dayOffset);
+        endDate = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+      }
+
+      const endStr = `${endDate}T${pad(endH)}:${pad(endMi)}:00`;
 
       const hall = halls.find((h) => h.id === hallId);
 
@@ -28,8 +40,8 @@ export default function AddScreeningModal({ movie, halls, selectedDate, onAdd, o
         movie_id: movie.id,
         hall_id: hallId,
         hall_number: hall?.number ?? 0,
-        datetime_start: startUtc.toISOString(),
-        datetime_end: endUtc.toISOString(),
+        datetime_start: startStr,
+        datetime_end: endStr,
         id: `temp-${Date.now()}`, // временный id, бэкенд переприсвоит
       });
       onClose();

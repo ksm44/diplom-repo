@@ -1,5 +1,5 @@
 from uuid import UUID, uuid4
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import qrcode
@@ -61,7 +61,7 @@ class TicketService:
         if not hall.is_active:
             raise SalesClosed("Продажа билетов в этом зале приостановлена")
 
-        if screening.datetime_start <= datetime.now(timezone.utc):
+        if screening.datetime_start <= datetime.now():
             raise ScreeningStarted("Сеанс уже начался")
 
         seats = self.seat_repo.get_by_ids(data.seat_ids)
@@ -94,8 +94,8 @@ class TicketService:
         self.db.commit()
         self.db.refresh(ticket)
 
-        # Генерация QR-кода и сохранение пути в БД
-        ticket.qr_code_url = self._generate_qr(ticket, screening)
+        # генерация QR-кода и сохранение его пути в БД
+        ticket.qr_code_url = self._generate_qr(ticket, screening, hall, seats)
         self.db.commit()
         self.db.refresh(ticket)
 
@@ -106,19 +106,21 @@ class TicketService:
         return [TicketResponseSchema.model_validate(t) for t in tickets]
 
     @staticmethod
-    def _generate_qr(ticket: TicketORM, screening) -> str:
-        """Создаёт PNG с QR и возвращает URL для отдачи."""
+    def _generate_qr(ticket, screening, hall, seats) -> str:
         QR_DIR.mkdir(parents=True, exist_ok=True)
+
+        # места в формате (ряд-место)
+        seats_str = ",".join(f"{s.row}-{s.number}" for s in seats)
 
         qr_data = (
             f"Билет:{ticket.code}"
-            f"|Сеанс:{screening.id}"
+            f"|Сеанс:{screening.datetime_start:%Y-%m-%d %H:%M}"
+            f"|Зал:{hall.number}"
+            f"|Места:{seats_str}"
             f"|Сумма:{ticket.total_price}"
         )
 
         img = qrcode.make(qr_data)
         filename = f"{ticket.code}.png"
-        filepath = QR_DIR / filename
-        img.save(filepath)
-
+        img.save(QR_DIR / filename)
         return f"/static/qrcodes/{filename}"

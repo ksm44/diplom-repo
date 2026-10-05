@@ -23,3 +23,6 @@ class SeatsBulkUpdateSchema(BaseModel):
     rows: int = Field(gt=0, le=50)
     cols: int = Field(gt=0, le=50)
     seats: list[SeatItemSchema] = []  # только VIP/заблокированные
+
+class SeatStateSchema(SeatSchema):
+    is_taken: bool

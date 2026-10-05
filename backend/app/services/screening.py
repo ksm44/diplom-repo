@@ -1,15 +1,20 @@
 from datetime import date, datetime, timedelta
 from uuid import UUID
-from datetime import timezone
 
 from sqlalchemy.orm import Session
 
 from app.models.screenings import ScreeningORM
+
 from app.repositories.halls import HallRepository
 from app.repositories.movies import MovieRepository
-from app.repositories.screenings import ScreeningRepository, MSK
-from app.schemas.screenings import ScreeningAddSchema, ScreeningResponseSchema
+from app.repositories.screenings import ScreeningRepository
+from app.repositories.seats import SeatRepository
+from app.repositories.tickets import TicketRepository
 
+from app.schemas.screenings import ScreeningAddSchema, ScreeningResponseSchema, ScreeningDetailSchema
+from app.schemas.halls import HallSchema
+from app.schemas.movies import MovieResponseSchema
+from app.schemas.seats import SeatStateSchema, SeatSchema
 
 
 class ScreeningNotFound(Exception): ...
@@ -26,13 +31,15 @@ class ScreeningService:
         self.repo = ScreeningRepository(db)
         self.movie_repo = MovieRepository(db)
         self.hall_repo = HallRepository(db)
+        self.seat_repo = SeatRepository(db)
+        self.ticket_repo = TicketRepository(db)
 
     def list_by_date(self, target: date) -> list[ScreeningResponseSchema]:
         return [self._to_schema(s) for s in self.repo.get_by_date(target)]
 
     def create_screening(self, data: ScreeningAddSchema) -> ScreeningResponseSchema:
-        start = self._to_utc(data.datetime_start)
-        if start <= datetime.now(timezone.utc):
+        start = data.datetime_start
+        if start <= datetime.now():
             raise ScreeningInPast("Нельзя создать сеанс в прошлом")
             
 
@@ -56,25 +63,25 @@ class ScreeningService:
 
     def bulk_save(self, target: date, screenings: list[ScreeningAddSchema]) -> list[ScreeningResponseSchema]:
         """Массовое сохранение: удаляем все сеансы дня и вставляем новые."""
-        # 1. удаляем существующие сеансы этого дня
+        # удаляем существующие сеансы этого дня
         existing = self.repo.get_by_date(target)
         self.repo.delete_many([s.id for s in existing])
 
-        # 2. проверяем новые
+        # проверяем новые
         to_create: list[ScreeningORM] = []
         for screening in screenings:
-            start = self._to_utc(screening.datetime_start)
+            start = screening.datetime_start
 
             # проверка "не в прошлом" — только если id не передан (новый сеанс)
-            if screening.id is None and start <= datetime.now(timezone.utc):
+            if screening.id is None and start <= datetime.now():
                 raise ScreeningInPast(f"Сеанс {start} в прошлом")
 
             movie = self.movie_repo.get_by_id(screening.movie_id)
             if not movie:
                 raise ScreeningNotFound(f"Фильм {screening.movie_id} не найден")
 
-            start = self._to_utc(screening.datetime_start)
-            if start <= datetime.now(timezone.utc):
+            start = screening.datetime_start
+            if start <= datetime.now():
                 raise ScreeningInPast(f"Сеанс {start} в прошлом")
             
             end = start + timedelta(minutes=movie.duration)
@@ -91,6 +98,31 @@ class ScreeningService:
         self.db.commit()
         return [self._to_schema(s) for s in to_create]
 
+    def get_detail(self, screening_id: UUID) -> ScreeningDetailSchema:
+        screening = self.repo.get_by_id(screening_id)
+        if not screening:
+            raise ScreeningNotFound(f"Сеанс {screening_id} не найден")
+
+        movie = self.movie_repo.get_by_id(screening.movie_id)
+        hall = self.hall_repo.get_by_id(screening.hall_id)
+        seats = self.seat_repo.get_by_hall(screening.hall_id)
+        taken = self.ticket_repo.get_booked_seat_ids(screening_id)
+
+        return ScreeningDetailSchema(
+            id=screening.id,
+            datetime_start=screening.datetime_start,
+            datetime_end=screening.datetime_start + timedelta(minutes=movie.duration),
+            movie=MovieResponseSchema.model_validate(movie),
+            hall=HallSchema.model_validate(hall),
+            seats=[
+                SeatStateSchema(
+                    **SeatSchema.model_validate(s).model_dump(),
+                    is_taken=s.id in taken,
+                )
+                for s in seats
+            ],
+        )
+
     def delete_screening(self, screening_id: UUID) -> None:
         s = self.repo.get_by_id(screening_id)
         if not s:
@@ -98,11 +130,9 @@ class ScreeningService:
         self.db.delete(s)
         self.db.commit()
 
-    @staticmethod #т.к. не используется self в этом методе
+    @staticmethod
     def _check_within_day(start: datetime, end: datetime) -> None:
-        start_msk = start.astimezone(MSK)
-        end_msk = end.astimezone(MSK)
-        if start_msk.date() != end_msk.date():
+        if start.date() != end.date():
             raise ScreeningOutOfDay("Сеанс не может выходить за пределы суток")
 
     def _check_overlaps(self, hall_id: UUID, start: datetime, end: datetime) -> None:
@@ -113,13 +143,13 @@ class ScreeningService:
                 raise ScreeningOverlap(f"Пересечение с сеансом {s.id}")
 
     def _check_all_overlaps(self, screenings: list[ScreeningORM]) -> None:
-        # группируем по залу
+        #группируем по залу
         by_hall: dict[UUID, list[ScreeningORM]] = {}
         for s in screenings:
             by_hall.setdefault(s.hall_id, []).append(s)
 
         for hall_id, items in by_hall.items():
-            # сортируем по началу
+            #сортируем по началу
             items.sort(key=lambda s: s.datetime_start)
 
             # проверяем, что каждый следующий начинается не раньше конца предыдущего
@@ -142,10 +172,5 @@ class ScreeningService:
             datetime_start=s.datetime_start,
             datetime_end=s.datetime_start + timedelta(minutes=movie.duration),  # type: ignore[union-attr]
             hall_number=hall.number if hall else 0,
+            is_active=hall.is_active,
         )
-
-    @staticmethod
-    def _to_utc(dt: datetime) -> datetime:
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)

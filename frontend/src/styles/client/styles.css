@@ -11,7 +11,7 @@ html {
 }
 
 body {
-  background-image: url("../../assets/images/background.jpg");
+  background-image: url("../../assets/images/background2.jpg");
   background-size: cover;
   background-attachment: fixed;
   background-position: right;
@@ -79,6 +79,12 @@ body {
 }
 .page-nav .page-nav__day_next::before {
   content: '>';
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 2.4rem;
+}
+.page-nav .page-nav__day_prev::before {
+  content: '<';
   font-family: monospace;
   font-weight: 700;
   font-size: 2.4rem;
@@ -170,7 +176,13 @@ body {
   text-decoration: none;
   font-size: 1.5rem;
 }
-
+.movie-seances__time_disabled {
+  pointer-events: auto;
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #ccc;
+  color: #666;
+}
 /* ~~~~~~~~~~~~ Кинозал ~~~~~~~~~~~~ */
 .acceptin-button {
   display: block;

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import bcrypt
 import jwt
@@ -25,7 +25,7 @@ def create_access_token(user_id: str, role: str) -> str:
     payload = {
         "sub": user_id,
         "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=access_token_expire_minutes),
+        "exp": datetime.now() + timedelta(minutes=access_token_expire_minutes),
     }
     return jwt.encode(payload, secret_key, algorithm=algorithm)
 

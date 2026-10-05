@@ -6,76 +6,91 @@ import { apiGet } from '../services/api';
 
 const WEEK_DAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
-// YYYY-MM-DD в локальном времени
-function toLocalDateStr(d) {
+// YYYY-MM-DD (локальное)
+function toDateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
-// Следующие 6 дней, начиная с сегодня
-function buildDays() {
-  const today = new Date();
+// 6 дней, начиная с startDate
+function buildDays(startDate) {
   return Array.from({ length: 6 }).map((_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
     return {
-      date: toLocalDateStr(d),
+      date: toDateStr(d),
       week: WEEK_DAYS_SHORT[d.getDay()],
       num: d.getDate(),
-      isToday: i === 0,
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
     };
   });
 }
 
-// "18:30" из ISO-строки (локальное время)
+// "18:30" из naive-строки (бэкенд отдаёт уже МСК, без Z)
 function formatTime(iso) {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return iso.slice(11, 16);
+}
+
+// Сегодня в 00:00 (локально)
+function getToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 export default function HomePage() {
-  const days = useMemo(buildDays, []);
+  const today = useMemo(getToday, []);
+  const [batchStart, setBatchStart] = useState(today);
+
+  const days = useMemo(() => {
+    const list = buildDays(batchStart);
+    list[0] = { ...list[0], isToday: batchStart.getTime() === today.getTime() };
+    return list;
+  }, [batchStart, today]);
+
   const [selectedDate, setSelectedDate] = useState(days[0].date);
 
-  const [movies, setMovies] = useState([]);       // справочник фильмов
-  const [screenings, setScreenings] = useState([]); // сеансы на выбранную дату
+  useEffect(() => {
+    setSelectedDate(days[0].date);
+  }, [batchStart]);
+
+  const [movies, setMovies] = useState([]);
+  const [screenings, setScreenings] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // один раз — фильмы
   useEffect(() => {
     apiGet('/movies')
       .then(setMovies)
       .catch(() => setError('Не удалось загрузить фильмы'));
   }, []);
 
-  // при смене даты — сеансы
   useEffect(() => {
     setLoading(true);
     setError(null);
-    apiGet(`/screenings?date_screening=${selectedDate}`)
+    const params = new URLSearchParams({ date_screening: selectedDate });
+    apiGet(`/screenings?${params.toString()}`)
       .then(setScreenings)
       .catch(() => setError('Не удалось загрузить сеансы'))
       .finally(() => setLoading(false));
   }, [selectedDate]);
 
-  // movie_id -> hall_number -> [ {id, start} ]
+  // movie_id -> hall_number -> { times: [...], is_active }
   const grouped = useMemo(() => {
     const map = new Map();
     for (const s of screenings) {
       if (!map.has(s.movie_id)) map.set(s.movie_id, new Map());
       const byHall = map.get(s.movie_id);
-      const hallKey = s.hall_number;
-      if (!byHall.has(hallKey)) byHall.set(hallKey, []);
-      byHall.get(hallKey).push({ id: s.id, start: s.datetime_start });
+      if (!byHall.has(s.hall_number)) {
+        byHall.set(s.hall_number, { times: [], is_active: s.is_active });
+      }
+      byHall.get(s.hall_number).times.push({ id: s.id, start: s.datetime_start });
     }
-    // сортировка времён внутри каждого зала
     for (const byHall of map.values()) {
-      for (const arr of byHall.values()) {
-        arr.sort((a, b) => new Date(a.start) - new Date(b.start));
+      for (const obj of byHall.values()) {
+        obj.times.sort((a, b) => a.start.localeCompare(b.start));
       }
     }
     return map;
@@ -86,6 +101,24 @@ export default function HomePage() {
     [movies]
   );
 
+  const canGoBack = batchStart.getTime() > today.getTime();
+
+  function goNext() {
+    const next = new Date(batchStart);
+    next.setDate(batchStart.getDate() + 6);
+    setBatchStart(next);
+  }
+
+  function goBack() {
+    const prev = new Date(batchStart);
+    prev.setDate(batchStart.getDate() - 6);
+    if (prev.getTime() < today.getTime()) {
+      setBatchStart(today);
+    } else {
+      setBatchStart(prev);
+    }
+  }
+
   return (
     <>
       <header className="page-header">
@@ -93,6 +126,17 @@ export default function HomePage() {
       </header>
 
       <nav className="page-nav">
+        {canGoBack && (
+          <a
+            className="page-nav__day page-nav__day_prev"
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              goBack();
+            }}
+          />
+        )}
+
         {days.map((d) => (
           <a
             key={d.date}
@@ -112,7 +156,15 @@ export default function HomePage() {
             <span className="page-nav__day-number">{d.num}</span>
           </a>
         ))}
-        <a className="page-nav__day page-nav__day_next" href="#" />
+
+        <a
+          className="page-nav__day page-nav__day_next"
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            goNext();
+          }}
+        />
       </nav>
 
       <main>
@@ -130,35 +182,47 @@ export default function HomePage() {
                   <img
                     className="movie__poster-image"
                     alt={`${movie.title} постер`}
-                    src={movie.poster}
+                    src={movie.poster_url}
                   />
                 </div>
                 <div className="movie__description">
                   <h2 className="movie__title">{movie.title}</h2>
                   <p className="movie__synopsis">{movie.description}</p>
                   <p className="movie__data">
-                    <span className="movie__data-duration">{movie.duration} минут</span>
-                    <span className="movie__data-origin">{movie.country}</span>
+                    <span className="movie__data-duration">{movie.duration} минут </span>
+                    <span className="movie__data-origin">{movie.countries}</span>
                   </p>
                 </div>
               </div>
 
               {[...hallsMap.entries()]
-                .sort(([a], [b]) => a - b) // залы по возрастанию номера
-                .map(([hallNumber, times]) => (
+                .sort(([a], [b]) => a - b)
+                .map(([hallNumber, { times, is_active }]) => (
                   <div className="movie-seances__hall" key={hallNumber}>
                     <h3 className="movie-seances__hall-title">Зал {hallNumber}</h3>
                     <ul className="movie-seances__list">
-                      {times.map((s) => (
-                        <li className="movie-seances__time-block" key={s.id}>
-                          <Link
-                            className="movie-seances__time"
-                            to={`/hall/${s.id}`}
+                      {times.map((s) =>
+                        is_active ? (
+                          <li
+                              className="movie-seances__time-block"
+
+                              key={s.id}
                           >
-                            {formatTime(s.start)}
-                          </Link>
-                        </li>
-                      ))}
+                            <Link className="movie-seances__time" to={`/hall/${s.id}`}>
+                              {formatTime(s.start)}
+                            </Link>
+                          </li>
+                        ) : (
+                          <li className="movie-seances__time-block" key={s.id}>
+                            <span
+                              className="movie-seances__time movie-seances__time_disabled"
+                              title="Продажа билетов приостановлена"
+                            >
+                              {formatTime(s.start)}
+                            </span>
+                          </li>
+                        )
+                      )}
                     </ul>
                   </div>
                 ))}

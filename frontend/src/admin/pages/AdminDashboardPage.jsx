@@ -1,6 +1,3 @@
-// покачто тут заглушка с моковыми данными
-//нужно будет настроить загрузку по api movies, halls и т.д.
-
 import { useState, useEffect, useMemo } from 'react';
 import { apiGet, apiPost, apiDelete, apiPatch, apiPut } from '../../services/api';
 import Accordion from "../components/Accordion";
@@ -10,35 +7,7 @@ import AddScreeningModal from '../components/AddScreeningModal';
 import '../../styles/admin/normalize.css';
 import '../../styles/admin/styles.css';
 
-// const MOVIES = [
-//   { id: 1, title: 'Звёздные войны XXIII: Атака клонированных клонов', duration: 130 },
-//   { id: 2, title: 'Миссия выполнима', duration: 120 },
-//   { id: 3, title: 'Серая пантера', duration: 90 },
-//   { id: 4, title: 'Движение вбок', duration: 95 },
-//   { id: 5, title: 'Кот Да Винчи', duration: 100 },
-// ];
-
-// const SEANCES = [
-//   {
-//     hall: 'Зал 1',
-//     items: [
-//       { title: 'Миссия выполнима', start: '00:00', width: 60, left: 0, color: 'rgb(133, 255, 137)' },
-//       { title: 'Миссия выполнима', start: '12:00', width: 60, left: 360, color: 'rgb(133, 255, 137)' },
-//       { title: 'Звёздные войны XXIII: Атака клонированных клонов', start: '14:00', width: 65, left: 420, color: 'rgb(202, 255, 133)' },
-//     ],
-//   },
-//   {
-//     hall: 'Зал 2',
-//     items: [
-//       { title: 'Звёздные войны XXIII: Атака клонированных клонов', start: '19:50', width: 65, left: 595, color: 'rgb(202, 255, 133)' },
-//       { title: 'Миссия выполнима', start: '22:00', width: 60, left: 660, color: 'rgb(133, 255, 137)' },
-//     ],
-//   },
-// ];
-
 export default function AdminDashboardPage() {
-
-  const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
 
   const [rows, setRows] = useState(10);
   const [cols, setCols] = useState(8);
@@ -65,7 +34,7 @@ export default function AdminDashboardPage() {
   const [setScreeningsDirty] = useState(false);
 
 
-  // Длина px на минуту (под макет: 60px = ~1 час → 1 px/мин)
+  // Длина блока в  px на минуту
   const PX_PER_MIN = 1;
 
   useEffect(() => {
@@ -111,23 +80,22 @@ export default function AdminDashboardPage() {
   const days = useMemo(buildDays, []);
 
   function formatTime(iso) {
-    const d = new Date(new Date(iso).getTime() + MSK_OFFSET_MS);
-    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+    return iso.slice(11, 16); // "2026-10-05T03:00:00" → "03:00"
   }
 
   // следующие 7 дней, начиная с сегодня (по МСК)
   function buildDays() {
     const now = new Date();
     return Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
-      const msk = new Date(d.getTime() + MSK_OFFSET_MS);
-      const iso = `${msk.getUTCFullYear()}-${String(msk.getUTCMonth() + 1).padStart(2, '0')}-${String(msk.getUTCDate()).padStart(2, '0')}`;
-      const weekday = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][msk.getUTCDay()];
-      return { iso, label: `${String(msk.getUTCDate()).padStart(2,'0')}.${String(msk.getUTCMonth()+1).padStart(2,'0')}.${msk.getUTCFullYear()}, ${weekday}` };
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const iso = toLocalDateStr(d);
+      const weekday = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getDay()];
+      return { iso, label: `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}, ${weekday}` };
     });
   }
 
-  // при загрузке с бэка — заполняем и копию
+  // при загрузке с бэкенда — заполняем и копию
   function loadScreenings(date = selectedDate) {
     const params = new URLSearchParams({ date_screening: date });
 
@@ -141,8 +109,8 @@ export default function AdminDashboardPage() {
 
 
   function minutesFromDayStart(iso) {
-    const d = new Date(new Date(iso).getTime() + MSK_OFFSET_MS);
-    return d.getUTCHours() * 60 + d.getUTCMinutes();
+    const [h, m] = iso.slice(11, 16).split(':').map(Number);
+    return h * 60 + m;
   }
 
   //Получение Залов
@@ -175,10 +143,9 @@ export default function AdminDashboardPage() {
 
   //Дата (для правильного формата запроса сеансов)
   function toLocalDateStr(d) {
-    const msk = new Date(d.getTime() + MSK_OFFSET_MS);
-    const y = msk.getUTCFullYear();
-    const m = String(msk.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(msk.getUTCDate()).padStart(2, '0');
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   }
 
@@ -304,16 +271,13 @@ export default function AdminDashboardPage() {
 
   //Сохранение сеансов в разделе «Сетка сеансов»
   async function handleSaveScreenings() {
-    const now = Date.now();
-    const payload = draftScreenings
-      .filter((s) => new Date(s.datetime_start).getTime() > now)
-      .map((s) => {
-        if (String(s.id).startsWith('temp-')) {
-          const { id, ...rest } = s;
-          return rest;
-        }
-        return s;
-      });
+    const payload = draftScreenings.map((s) => {
+      if (String(s.id).startsWith('temp-')) {
+        const { id, ...rest } = s;
+        return rest;
+      }
+      return s;
+    });
     try {
       await apiPut(`/screenings?date_screening=${selectedDate}`, payload);
       loadScreenings(selectedDate);

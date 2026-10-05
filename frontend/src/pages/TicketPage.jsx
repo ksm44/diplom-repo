@@ -1,16 +1,34 @@
-import { useParams } from 'react-router-dom';
-import qrCode from '../assets/images/qr-code.png';
+import { useLocation, useParams } from 'react-router-dom';
 import '../styles/client/normalize.css';
 import '../styles/client/styles.css';
 
 export default function TicketPage() {
   const { id } = useParams();
+  const location = useLocation();
+  const { ticket, movie, hall, datetime_start, chosenSeats } = location.state || {};
 
-  // Заглушка — позже взять из apiGet(`/bookings/${id}`)
-  const movieTitle = 'Звёздные войны XXIII: Атака клонированных клонов';
-  const chairs = '6, 7';
-  const hall = '1';
-  const startTime = '18:30';
+  if (!ticket) {
+    return (
+      <>
+        <header className="page-header">
+          <h1 className="page-header__title">Идём<span>в</span>кино</h1>
+        </header>
+        <main>
+          <section className="ticket">
+            <p style={{ padding: 32, fontSize: '1.6rem' }}>
+              Данные о бронировании потеряны.
+            </p>
+          </section>
+        </main>
+      </>
+    );
+  }
+
+  const chairs = chosenSeats
+  .slice()
+  .sort((a, b) => a.row - b.row || a.number - b.number)
+  .map((s) => `${s.number}(ряд ${s.row})`)
+  .join(', ');
 
   return (
     <>
@@ -26,19 +44,22 @@ export default function TicketPage() {
 
           <div className="ticket__info-wrapper">
             <p className="ticket__info">
-              На фильм: <span className="ticket__details ticket__title">{movieTitle}</span>
+              На фильм: <span className="ticket__details ticket__title">{movie.title}</span>
             </p>
             <p className="ticket__info">
               Места: <span className="ticket__details ticket__chairs">{chairs}</span>
             </p>
             <p className="ticket__info">
-              В зале: <span className="ticket__details ticket__hall">{hall}</span>
+              В зале: <span className="ticket__details ticket__hall">{hall.number}</span>
             </p>
             <p className="ticket__info">
-              Начало сеанса: <span className="ticket__details ticket__start">{startTime}</span>
+              Начало сеанса:{' '}
+              <span className="ticket__details ticket__start">
+                {datetime_start.slice(11, 16)}
+              </span>
             </p>
 
-            <img className="ticket__info-qr" src={qrCode} alt="QR-код бронирования" />
+            <img className="ticket__info-qr" src={ticket.qr_code_url} alt="QR-код бронирования" />
 
             <p className="ticket__hint">
               Покажите QR-код нашему контроллеру для подтверждения бронирования.

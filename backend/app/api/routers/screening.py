@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.dependencies import get_screening_service, require_admin, get_current_user
 from app.schemas.screenings import (
     ScreeningAddSchema,
-    ScreeningResponseSchema,
+    ScreeningResponseSchema, ScreeningDetailSchema,
 )
 from app.services.screening import (
     ScreeningService, ScreeningNotFound, ScreeningOverlap, ScreeningOutOfDay, ScreeningInPast,
@@ -58,6 +58,17 @@ def bulk_save(
     except ScreeningInPast as e:
         raise HTTPException(403, detail=str(e))
 
+# получение всей информации по id сеанса
+@router.get("/{screening_id}", response_model=ScreeningDetailSchema,
+            dependencies=[Depends(get_current_user)])
+def get_screening(
+    screening_id: UUID,
+    service: ScreeningService = Depends(get_screening_service),
+):
+    try:
+        return service.get_detail(screening_id)
+    except ScreeningNotFound as e:
+        raise HTTPException(404, detail=str(e))
 
 @router.delete("/{screening_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)]
                )
