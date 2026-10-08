@@ -13,6 +13,7 @@ RUN mkdir -p /code/static/posters
 
 
 COPY backend/app/ ./app
+COPY backend/tests/ ./tests
 
 EXPOSE 8000
 

@@ -1,6 +1,5 @@
-import React from "react";
-
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React, { useEffect } from "react";
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 
 import HomePage from './pages/HomePage';
 import HallPage from './pages/HallPage';
@@ -12,9 +11,37 @@ import NotFoundPage from './pages/NotFoundPage';
 
 import AdminDashboardPage from './admin/pages/AdminDashboardPage';
 
+function TokenWatcher() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const check = () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.exp * 1000 < Date.now()) {
+          localStorage.removeItem('token');
+          navigate('/login', { replace: true });
+        }
+      } catch {
+        localStorage.removeItem('token');
+        navigate('/login', { replace: true });
+      }
+    };
+
+    check(); // сразу при монтировании
+    const id = setInterval(check, 30_000); // раз в 30 сек
+    return () => clearInterval(id);
+  }, [navigate]);
+
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <TokenWatcher />
       <Routes>
         {/* публичные */}
         <Route path="/login" element={<LoginPage />} />

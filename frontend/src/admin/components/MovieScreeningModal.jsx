@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { apiDelete } from '../../services/api'; //
 
-export default function AddScreeningModal({ movie, halls, selectedDate, onAdd, onClose }) {
+export default function MovieScreeningModal({ movie, halls, selectedDate, onAdd, onClose, onDeleted, }) {
   const [hallId, setHallId] = useState(halls[0]?.id || '');
   const [time, setTime] = useState(''); // "HH:mm"
   const [loading, setLoading] = useState(false);
@@ -8,6 +9,21 @@ export default function AddScreeningModal({ movie, halls, selectedDate, onAdd, o
   function handleSubmit(e) {
     e.preventDefault();
     if (!hallId || !time) return;
+
+    // naive-МСК "YYYY-MM-DDTHH:mm:00"
+    const startStr = `${selectedDate}T${time}:00`;
+
+    // "сейчас" в том же формате
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const nowStr =
+      `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+      `T${pad(now.getHours())}:${pad(now.getMinutes())}:00`;
+
+    if (startStr <= nowStr) {
+      alert('Нельзя создать сеанс в прошлом. Выберите будущее время.');
+      return;
+    }
     setLoading(true);
 
     try {
@@ -52,12 +68,23 @@ export default function AddScreeningModal({ movie, halls, selectedDate, onAdd, o
     }
   }
 
+  async function handleDeleteMovie() {
+    if (!window.confirm(`Вы действительно хотите удалить фильм «${movie.title}»?`)) return;
+    try {
+      await apiDelete(`/movies/${movie.id}`);
+      onDeleted?.(); // сообщаем родителю, что фильм удалён
+      onClose();
+    } catch {
+      alert('Не удалось удалить фильм');
+    }
+  }
+
   return (
     <div className="popup active" onClick={onClose}>
       <div className="popup__container" onClick={(e) => e.stopPropagation()}>
         <div className="popup__content">
           <header className="popup__header">
-            <h2 className="popup__title">Сеанс для «{movie.title}»</h2>
+            <h2 className="popup__title">Фильм «{movie.title}»</h2>
             <div className="popup__dismiss">
               <button
                 type="button"
@@ -107,7 +134,17 @@ export default function AddScreeningModal({ movie, halls, selectedDate, onAdd, o
                 />
               </label>
 
-              <div className="conf-step__buttons text-center">
+              <div className="conf-step-film__buttons text-center">
+
+                <button
+                  type="button"
+                  className="conf-step__button conf-step__button-remove"
+                  onClick={handleDeleteMovie}
+                  title={"Удалить фильм"}
+                >
+                  Удалить
+                </button>
+
                 <button
                   type="button"
                   className="conf-step__button conf-step__button-regular"
@@ -115,12 +152,15 @@ export default function AddScreeningModal({ movie, halls, selectedDate, onAdd, o
                 >
                   Отмена
                 </button>
+
+
+
                 <button
                   type="submit"
                   className="conf-step__button conf-step__button-accent"
                   disabled={loading}
                 >
-                  {loading ? 'Добавление...' : 'Вставить фильм'}
+                  {loading ? 'Добавление...' : 'Вставить сеанс'}
                 </button>
               </div>
             </form>

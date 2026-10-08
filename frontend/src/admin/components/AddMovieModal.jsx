@@ -26,8 +26,8 @@ export default function AddMovieModal({ onClose, onCreated }) {
       });
       onCreated();
       onClose();
-    } catch {
-      alert('Не удалось добавить фильм');
+    } catch (err) {
+      alert('Не удалось добавить фильм: ' + err.message);
     } finally {
       setLoading(false);
     }

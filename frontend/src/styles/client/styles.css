@@ -423,6 +423,42 @@ body {
   height: 20rem;
 }
 
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.page-header__logout {
+  margin-left: auto;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 3px;
+  background-color: #16A6AF;
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color .3s;
+}
+
+.page-header__logout:hover {
+  background-color: #2FC9D2;
+}
+
+.page-header__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.popup__content {
+  max-height: calc(100vh - 200px); /* 100px сверху + 100px снизу */
+  overflow-y: auto;
+}
+
 @media screen and (min-width: 479px) {
   .page-nav .page-nav__day {
     padding: 1rem 2rem;

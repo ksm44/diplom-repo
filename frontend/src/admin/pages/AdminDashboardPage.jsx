@@ -2,10 +2,43 @@ import { useState, useEffect, useMemo } from 'react';
 import { apiGet, apiPost, apiDelete, apiPatch, apiPut } from '../../services/api';
 import Accordion from "../components/Accordion";
 import AddMovieModal from "../components/AddMovieModal";
-import AddScreeningModal from '../components/AddScreeningModal';
+import MovieScreeningModal from '../components/MovieScreeningModal';
+import ScreeningDetailsModal from "../components/ScreeningDetailsModal";
+import LogoutButton from '../../components/LogoutButton';
 
 import '../../styles/admin/normalize.css';
 import '../../styles/admin/styles.css';
+
+  const WEEK_DAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
+// YYYY-MM-DD (локальное)
+function toLocalDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// 6 дней, начиная с startDate
+function buildDaysForBatch(startDate) {
+  return Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
+    return {
+      iso: toLocalDateStr(d),
+      week: WEEK_DAYS_SHORT[d.getDay()],
+      num: d.getDate(),
+      isWeekend: d.getDay() === 0 || d.getDay() === 6,
+    };
+  });
+}
+
+// Сегодня в 00:00 (локально)
+function getToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 export default function AdminDashboardPage() {
 
@@ -29,13 +62,61 @@ export default function AdminDashboardPage() {
   const [showAddScreening, setShowAddScreening] = useState(false);
   const [movieForScreening, setMovieForScreening] = useState(null);
   const [screenings, setScreenings] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(toLocalDateStr(new Date()));
   const [draftScreenings, setDraftScreenings] = useState([]);   // редактируемая копия
-  const [setScreeningsDirty] = useState(false);
 
+  //Для изменения состояния кнопок "Сохранить"
+  const [seatsDirty, setSeatsDirty] = useState(false);
+  const [pricesDirty, setPricesDirty] = useState(false);
+  const [screeningsDirty, setScreeningsDirty] = useState(false);
+
+  const [selectedScreening, setSelectedScreening] = useState(null);
 
   // Длина блока в  px на минуту
-  const PX_PER_MIN = 1;
+  const TIMELINE_WIDTH = 720 - 12; // длина (из styles.css) - padding
+  const PX_PER_MIN = TIMELINE_WIDTH / (24 * 60); // = 0.5 пикс в минуте
+
+  // Диапазон дат для "Сетки сеансов" (page-nav)
+  const today = useMemo(getToday, []);
+  const [batchStart, setBatchStart] = useState(today);
+  const [selectedDate, setSelectedDate] = useState(toLocalDateStr(today));
+
+  const days = useMemo(() => {
+    const list = buildDaysForBatch(batchStart);
+    list[0] = { ...list[0], isToday: batchStart.getTime() === today.getTime() };
+    return list;
+  }, [batchStart, today]);
+
+  // при смене окна — выбрать первую дату
+  useEffect(() => {
+    setSelectedDate(days[0].iso);
+  }, [batchStart]);
+
+  const canGoBack = batchStart.getTime() > today.getTime();
+
+  async function openScreeningDetails(screeningId) {
+  try {
+    const full = await apiGet(`/screenings/${screeningId}`);
+    setSelectedScreening(full);
+  } catch {
+    alert('Не удалось загрузить сеанс');
+  }
+}
+
+  function goNext() {
+    const next = new Date(batchStart);
+    next.setDate(batchStart.getDate() + 6);
+    setBatchStart(next);
+  }
+
+  function goBack() {
+    const prev = new Date(batchStart);
+    prev.setDate(batchStart.getDate() - 6);
+    if (prev.getTime() < today.getTime()) {
+      setBatchStart(today);
+    } else {
+      setBatchStart(prev);
+    }
+  }
 
   useEffect(() => {
     loadHalls();
@@ -55,7 +136,8 @@ export default function AdminDashboardPage() {
   }, [rows, cols]);
 
   useEffect(() => { // Автовыбор первого зала для отображения цен
-    if (halls.length > 0 && !priceStandard && !priceVip) {
+    if (halls.length > 0 && !selectedPriceHall) {
+      setSelectedPriceHall(halls[0]);
       handlePriceHallChange(halls[0]);
     }
   }, [halls]);
@@ -67,32 +149,28 @@ export default function AdminDashboardPage() {
   //Группировка сеансов
   const groupedScreenings = useMemo(() => {
     const byHall = new Map();
+
+    // 1) заранее создаём пустой массив для каждого существующего зала
+    for (const hall of halls) {
+      byHall.set(hall.number, []);
+    }
+
+    // 2) раскидываем сеансы по залам
     for (const s of draftScreenings) {
       if (!byHall.has(s.hall_number)) byHall.set(s.hall_number, []);
       byHall.get(s.hall_number).push(s);
     }
+
+    // 3) сортировка сеансов внутри зала
     for (const arr of byHall.values()) {
       arr.sort((a, b) => new Date(a.datetime_start) - new Date(b.datetime_start));
     }
-    return [...byHall.entries()].sort(([a], [b]) => a - b);
-  }, [draftScreenings]);
 
-  const days = useMemo(buildDays, []);
+    return [...byHall.entries()].sort(([a], [b]) => a - b);
+  }, [draftScreenings, halls]);
 
   function formatTime(iso) {
     return iso.slice(11, 16); // "2026-10-05T03:00:00" → "03:00"
-  }
-
-  // следующие 7 дней, начиная с сегодня (по МСК)
-  function buildDays() {
-    const now = new Date();
-    return Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(now);
-      d.setDate(now.getDate() + i);
-      const iso = toLocalDateStr(d);
-      const weekday = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getDay()];
-      return { iso, label: `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}, ${weekday}` };
-    });
   }
 
   // при загрузке с бэкенда — заполняем и копию
@@ -104,7 +182,8 @@ export default function AdminDashboardPage() {
         setScreenings(data);
         setDraftScreenings(data.map((s) => ({ ...s })));
       })
-      .catch(() => alert('Не удалось загрузить сеансы'));
+      .catch((err) => alert(`Не удалось загрузить сеансы: ${err.message}`));
+    setScreeningsDirty(false);
   }
 
 
@@ -115,7 +194,7 @@ export default function AdminDashboardPage() {
 
   //Получение Залов
   function loadHalls() {
-    apiGet('/halls').then(setHalls).catch(() => alert('Не удалось загрузить залы'));
+    apiGet('/halls').then(setHalls).catch((err) => alert(`Не удалось загрузить залы: ${err.message}`));
 
   }
 
@@ -134,19 +213,12 @@ export default function AdminDashboardPage() {
       const fresh = data.find((h) => h.id === selectedPriceHall.id);
       if (fresh) handlePriceHallChange(fresh);
     });
+    setPricesDirty(false);
   }
 
   //Добавление нового фильма в БД
   function loadMovies() {
-    apiGet('/movies').then(setMovies).catch(() => alert('Не удалось загрузить фильмы'));
-  }
-
-  //Дата (для правильного формата запроса сеансов)
-  function toLocalDateStr(d) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    apiGet('/movies').then(setMovies).catch((err) => alert(`Не удалось загрузить фильмы: ${err.message}`));
   }
 
   //Создание нового Зала
@@ -154,8 +226,8 @@ export default function AdminDashboardPage() {
     try {
       await apiPost('/halls', { rows: 10, cols: 8 });
       loadHalls();
-    } catch {
-      alert('Не удалось создать зал');
+    } catch (err) {
+      alert(`Не удалось создать зал: ${err.message}`);
     }
   }
 
@@ -166,8 +238,8 @@ export default function AdminDashboardPage() {
     try {
       await apiDelete(`/halls/${hall_number}`);
       loadHalls(); // ← обновляем список
-    } catch {
-      alert('Не удалось удалить зал');
+    } catch (err) {
+      alert(`Не удалось удалить зал: ${err.message}`);
     }
   }
 
@@ -179,12 +251,14 @@ export default function AdminDashboardPage() {
         setDraftSeats(data.seats.map((s) => ({ ...s }))); // копия
         setRows(data.rows);
         setCols(data.cols);
+        setSeatsDirty(false);
       })
-      .catch(() => alert('Не удалось загрузить зал'));
+      .catch((err) => alert(`Не удалось загрузить зал: ${err.message}`));
   }
 
   //Обработчик клика по креслу
   function handleSeatClick(row, number) {
+    setSeatsDirty(true);
     setDraftSeats((prev) => {
       const existing = prev.find((s) => s.row === row && s.number === number);
       const base = existing || { row, number, kind: 'standard', is_blocked: false };
@@ -208,16 +282,26 @@ export default function AdminDashboardPage() {
     });
   }
 
-  //Получение цвета фона фильмов
+  //Для указания одинакового цвета фона фильмов
+  const MOVIE_COLORS = [
+    '#caff85', // 1
+    '#85ff89', // 2
+    '#85ffd3', // 3
+    '#85e2ff', // 4
+    '#8599ff', // 5
+    '#ba85ff', // 6
+    '#ff85fb', // 7
+    '#ff85b1', // 8
+    '#ffa285', // 9
+  ];
+
   function getMovieColor(index) {
-    const baseHue = 50;
-    const degrees = 48;
-    const hue = (baseHue + index * degrees) % 360;
-    return `hsl(${hue}, 100%, 76%)`;
+    return MOVIE_COLORS[index % MOVIE_COLORS.length];
   }
 
   function handleAddScreening(newScreening) {
     setDraftScreenings((prev) => [...prev, newScreening]);
+    setScreeningsDirty(true);
   }
 
 
@@ -248,10 +332,13 @@ export default function AdminDashboardPage() {
         seats: fullSeats,
       });
       await loadHall(selectedHall.number);
-    } catch {
-      alert('Не удалось сохранить/изменить схему зала.' +
-          '\n\nНельзя изменить схему зала, пока в нём есть сеансы.' +
-          '\n\nПопробуйте удалить и создать зал заново ');
+    } catch (err) {
+      alert(
+        'Не удалось сохранить/изменить схему зала.\n\n' +
+        'Нельзя изменить схему зала, пока в нём есть сеансы.\n\n' +
+        'Попробуйте удалить и создать зал заново.\n\n' +
+        `Причина: ${err.message}`
+      );
     }
   }
 
@@ -264,8 +351,9 @@ export default function AdminDashboardPage() {
         price_vip: Number(priceVip),
       });
       loadHalls();
-    } catch {
-      alert('Не удалось сохранить цены');
+      setPricesDirty(false);
+    } catch (err) {
+      alert(`Не удалось сохранить цены: ${err.message}`);
     }
   }
 
@@ -278,11 +366,12 @@ export default function AdminDashboardPage() {
       }
       return s;
     });
+
     try {
       await apiPut(`/screenings?date_screening=${selectedDate}`, payload);
       loadScreenings(selectedDate);
-    } catch {
-      alert('Не удалось сохранить сеансы');
+    } catch (err) {
+      alert(`Не удалось сохранить сеансы: ${err.message}`);
     }
   }
 
@@ -291,16 +380,19 @@ export default function AdminDashboardPage() {
     try {
       await apiPatch(`/halls/${hall.number}/activate`);
       loadHalls();
-    } catch {
-      alert('Не удалось изменить статус продаж');
+    } catch (err) {
+      alert(`Не удалось изменить статус продаж: ${err.message}`);
     }
   }
 
   return (
     <>
       <header className="page-header">
-        <h1 className="page-header__title">Идём<span>в</span>кино</h1>
-        <span className="page-header__subtitle">Администраторррская</span>
+        <div>
+          <h1 className="page-header__title">Идём<span>в</span>кино</h1>
+          <span className="page-header__subtitle">Администраторррская</span>
+        </div>
+        <LogoutButton />
       </header>
 
       <main className="conf-steps">
@@ -352,7 +444,12 @@ export default function AdminDashboardPage() {
                 type="text"
                 className="conf-step__input"
                 value={rows}
-                onChange={(e) => setRows(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 2);
+                  setRows(e.target.value);
+                  setSeatsDirty(true);
+                }}
+                maxLength={2}
               />
             </label>
             <span className="multiplier">x</span>
@@ -362,7 +459,12 @@ export default function AdminDashboardPage() {
                 type="text"
                 className="conf-step__input"
                 value={cols}
-                onChange={(e) => setCols(e.target.value)}
+                onChange={(e) => {
+                   const v = e.target.value.replace(/\D/g, '').slice(0, 2);
+                  setCols(e.target.value);
+                  setSeatsDirty(true);
+                }}
+                maxLength={2}
               />
             </label>
           </div>
@@ -378,7 +480,7 @@ export default function AdminDashboardPage() {
               Чтобы изменить вид кресла, нажмите по нему левой кнопкой мыши
             </p>
           </div>
-          
+
           {selectedHall && (
             <div className="conf-step__hall">
               <div className="conf-step__hall-wrapper">
@@ -422,6 +524,7 @@ export default function AdminDashboardPage() {
               value="Сохранить"
               className="conf-step__button conf-step__button-accent"
               onClick={handleSaveSeats}
+              disabled={!seatsDirty}
             />
           </fieldset>
         </Accordion>
@@ -441,6 +544,7 @@ export default function AdminDashboardPage() {
                   onChange={() => {
                     setSelectedPriceHall(hall);
                     handlePriceHallChange(hall);
+                    setPricesDirty(false);
                   }}
                 />
                 <span className="conf-step__selector">Зал {hall.number}</span>
@@ -457,7 +561,10 @@ export default function AdminDashboardPage() {
                 className="conf-step__input"
                 placeholder="0"
                 value={priceStandard}
-                onChange={(e) => setPriceStandard(e.target.value)}
+                onChange={(e) => {
+                  setPriceStandard(e.target.value);
+                  setPricesDirty(true);
+                }}
               />
             </label>
             за <span className="conf-step__chair conf-step__chair_standart" /> обычные кресла
@@ -470,7 +577,10 @@ export default function AdminDashboardPage() {
                 className="conf-step__input"
                 placeholder="0"
                 value={priceVip}
-                onChange={(e) => setPriceVip(e.target.value)}
+                onChange={(e) => {
+                  setPriceVip(e.target.value);
+                  setPricesDirty(true);
+                }}
               />
             </label>
             за <span className="conf-step__chair conf-step__chair_vip" /> VIP кресла
@@ -487,6 +597,7 @@ export default function AdminDashboardPage() {
               value="Сохранить"
               className="conf-step__button conf-step__button-accent"
               onClick={handleSavePrices}
+              disabled={!pricesDirty}
             />
           </fieldset>
         </Accordion>
@@ -501,6 +612,8 @@ export default function AdminDashboardPage() {
               Добавить фильм
             </button>
           </p>
+
+          <p className="conf-step__paragraph">Нажмите на фильм для создания сеанса:</p>
 
           <div className="conf-step__movies">
             {movies.map((m) => (
@@ -518,25 +631,47 @@ export default function AdminDashboardPage() {
           </div>
           <div className="conf-step__dates-box">
             <p className="conf-step__paragraph">Выберите дату:</p>
-            <ul className="conf-step__selectors-box">
+            <nav className="page-nav">
+              {canGoBack && (
+                <a
+                  className="page-nav__day page-nav__day_prev"
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    goBack();
+                  }}
+                />
+              )}
+
               {days.map((d) => (
-                <li
+                <a
                   key={d.iso}
-                  onClick={() => setSelectedDate(d.iso)}
-                  style={{ cursor: 'pointer' }}
+                  className={
+                    'page-nav__day' +
+                    (d.isToday ? ' page-nav__day_today' : '') +
+                    (d.iso === selectedDate ? ' page-nav__day_chosen' : '') +
+                    (d.isWeekend ? ' page-nav__day_weekend' : '')
+                  }
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setSelectedDate(d.iso);
+                  }}
                 >
-                  <input
-                    type="radio"
-                    className="conf-step__radio"
-                    name="screening-date"
-                    value={d.iso}
-                    checked={selectedDate === d.iso}
-                    onChange={() => setSelectedDate(d.iso)}
-                  />
-                  <span className="conf-step__selector">{d.label}</span>
-                </li>
+                  <span className="page-nav__day-week">{d.week}</span>
+                  <span className="page-nav__day-number">{d.num}</span>
+                </a>
               ))}
-            </ul>
+
+              <a
+                className="page-nav__day page-nav__day_next"
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  goNext();
+                }}
+              />
+            </nav>
 
             <div className="conf-step__seances">
               {groupedScreenings.map(([hallNumber, items]) => (
@@ -560,8 +695,10 @@ export default function AdminDashboardPage() {
                             width: `${width}px`,
                             left: `${left}px`,
                             backgroundColor: bg,
+                            cursor: 'pointer',
                           }}
                           title={movie ? movie.title : ''}
+                          onClick={() => openScreeningDetails(s.id)}
                         >
                           <p className="conf-step__seances-movie-title">
                             {movie ? movie.title : '—'}
@@ -580,12 +717,16 @@ export default function AdminDashboardPage() {
           <fieldset className="conf-step__buttons text-center">
             <button
               className="conf-step__button conf-step__button-regular"
-              onClick={() => setDraftScreenings(screenings.map((s) => ({ ...s })))}
+              onClick={() =>{
+                setDraftScreenings(screenings.map((s) => ({ ...s })));
+                setScreeningsDirty(false);
+              }}
             >
               Отмена
             </button>
             <input type="submit" value="Сохранить" className="conf-step__button conf-step__button-accent"
-              onClick={handleSaveScreenings}
+                   onClick={handleSaveScreenings}
+                   disabled={!screeningsDirty}
             />
           </fieldset>
         </Accordion>
@@ -621,14 +762,26 @@ export default function AdminDashboardPage() {
       )}
 
       {showAddScreening && movieForScreening && (
-        <AddScreeningModal
+        <MovieScreeningModal
           movie={movieForScreening}
           halls={halls}
           selectedDate={selectedDate}
           onAdd={handleAddScreening}
           onClose={() => setShowAddScreening(false)}
+          onDeleted={loadMovies}
         />
       )}
+
+      {selectedScreening && (
+        <ScreeningDetailsModal
+          screening={selectedScreening}
+          movie={movies.find((m) => m.id === selectedScreening.movie_id)}
+          hall={halls.find((h) => h.id === selectedScreening.hall_id)}
+          onClose={() => setSelectedScreening(null)}
+          onDeleted={() => loadScreenings(selectedDate)}
+        />
+      )}
+
     </>
   );
 }

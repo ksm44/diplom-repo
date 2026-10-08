@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, time
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -62,41 +62,50 @@ class ScreeningService:
         return self._to_schema(s)
 
     def bulk_save(self, target: date, screenings: list[ScreeningAddSchema]) -> list[ScreeningResponseSchema]:
-        """Массовое сохранение: удаляем все сеансы дня и вставляем новые."""
-        # удаляем существующие сеансы этого дня
-        existing = self.repo.get_by_date(target)
-        self.repo.delete_many([s.id for s in existing])
+        now = datetime.now()
 
-        # проверяем новые
+        # 1. существующие сеансы дня
+        existing = self.repo.get_by_date(target)
+        existing_by_id = {s.id: s for s in existing}
+
+        # 2. НЕ удаляем ничего — фронт присылает "слепок", но мы только ДОБАВЛЯЕМ
+        #    (если нужно удалять — см. заметку ниже)
+
+        # 3. обрабатываем входные: существующие — пропускаем, новые — валидируем
         to_create: list[ScreeningORM] = []
         for screening in screenings:
             start = screening.datetime_start
 
-            # проверка "не в прошлом" — только если id не передан (новый сеанс)
-            if screening.id is None and start <= datetime.now():
+            # это существующий сеанс? пропускаем
+            if screening.id is not None and screening.id in existing_by_id:
+                continue
+
+            # это новый
+            if start <= now:
                 raise ScreeningInPast(f"Сеанс {start} в прошлом")
 
             movie = self.movie_repo.get_by_id(screening.movie_id)
             if not movie:
                 raise ScreeningNotFound(f"Фильм {screening.movie_id} не найден")
 
-            start = screening.datetime_start
-            if start <= datetime.now():
-                raise ScreeningInPast(f"Сеанс {start} в прошлом")
-            
             end = start + timedelta(minutes=movie.duration)
-
             self._check_within_day(start, end)
+
             to_create.append(ScreeningORM(
                 movie_id=screening.movie_id,
                 hall_id=screening.hall_id,
                 datetime_start=start,
             ))
 
-        self._check_all_overlaps(to_create)
+        # 4. пересечения — среди to_create + все существующие
+        self._check_all_overlaps(to_create + existing)
+
+        # 5. вставка только новых
         self.repo.create_many(to_create)
         self.db.commit()
-        return [self._to_schema(s) for s in to_create]
+
+        # 6. возврат: всё, что осталось в дне
+        return [self._to_schema(s) for s in (existing + to_create)]
 
     def get_detail(self, screening_id: UUID) -> ScreeningDetailSchema:
         screening = self.repo.get_by_id(screening_id)
@@ -132,7 +141,7 @@ class ScreeningService:
 
     @staticmethod
     def _check_within_day(start: datetime, end: datetime) -> None:
-        if start.date() != end.date():
+        if end.date() > start.date() and end.time() != time(0, 0):
             raise ScreeningOutOfDay("Сеанс не может выходить за пределы суток")
 
     def _check_overlaps(self, hall_id: UUID, start: datetime, end: datetime) -> None:

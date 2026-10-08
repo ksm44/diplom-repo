@@ -20,7 +20,24 @@ async function request(path, options = {}) {
     throw new Error('Неавторизован');
   }
 
-  if (!response.ok) throw new Error('Ошибка запроса к серверу');
+  if (!response.ok) {
+    let detail = 'Ошибка запроса к серверу';
+    try {
+      const data = await response.json();
+      if (typeof data?.detail === 'string') {
+        detail = data.detail;
+      } else if (Array.isArray(data?.detail)) {
+        // FastAPI-валидация: собираем сообщения из detail[].msg
+        detail = data.detail
+          .map((e) => {
+            const field = e.loc?.slice(1).join('.') ?? '';
+            return field ? `${field}: ${e.msg}` : e.msg;
+          })
+          .join('; ');
+      }
+    } catch { /* тело не JSON — оставляем дефолт */ }
+    throw new Error(detail);
+  }
 
   // 204 No Content → нет тела → ничего не возвращаем (чтобы не было ошибок)
   if (response.status === 204) return null;
@@ -58,18 +75,27 @@ export function apiPatch(path, body) {
 }
 
 // POST-запрос с multipart/form-data (для загрузки картинок постеров фильмов)
-export function apiUpload(path, file) {
+export async function apiUpload(path, file) {
   const token = localStorage.getItem('token');
   const form = new FormData();
   form.append('file', file);
-  return fetch(`/api${path}`, {
+
+  const r = await fetch(`/api${path}`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
-  }).then((r) => {
-    if (!r.ok) throw new Error('Ошибка загрузки');
-    return r.json();
   });
+
+  if (!r.ok) {
+    let detail = 'Ошибка загрузки';
+    try {
+      const data = await r.json();
+      if (data?.detail) detail += `: ${data.detail}`;
+    } catch {}
+    throw new Error(detail);
+  }
+
+  return r.json();
 }
 
 // PUT-запрос

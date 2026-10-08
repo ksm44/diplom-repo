@@ -1,8 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiPost } from '../services/api';
+import { Navigate } from 'react-router-dom';
 
 export default function LoginPage() {
+  const token = localStorage.getItem('token');
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const isExpired = payload.exp * 1000 < Date.now();
+
+      if (isExpired) { // если токен истёк удаляем его
+        localStorage.removeItem('token');
+      } else {
+        return <Navigate to="/" replace />; // редиректим на homePage
+      }
+    } catch {
+      localStorage.removeItem('token'); // битый токен удаляем
+    }
+  }
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -23,8 +40,10 @@ export default function LoginPage() {
   return (
     <>
       <header className="page-header">
-        <h1 className="page-header__title">Идём<span>в</span>кино</h1>
-        <span className="page-header__subtitle">Администраторррская</span>
+        <div>
+          <h1 className="page-header__title">Идём<span>в</span>кино</h1>
+          <span className="page-header__subtitle">Администраторррская</span>
+        </div>
       </header>
       <main>
         <section className="login">

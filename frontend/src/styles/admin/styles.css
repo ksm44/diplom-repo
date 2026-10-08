@@ -205,12 +205,29 @@ input[type='radio'], input[type='submit'], button, .conf-step__header, select {
     margin-left: 12px; }
 
 .conf-step__buttons {
-  margin-top: 10px; }
+  margin-top: 10px;}
+
+.conf-step-film__buttons {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+}
 
 .conf-step__button-regular {
   color: #63536C;
   padding: 12px 32px;
   margin-top: 17px; }
+.conf-step__button-remove {
+  margin-right: auto;
+  margin-top: 17px;
+  padding: 12px 32px;
+  color: #d9264e;
+  left: 0;
+}
+.conf-step__button-remove:hover{
+  background-color: #fdbcc8;
+}
+
 
 .conf-step__button.conf-step__button-accent, .login__button {
   color: #FFFFFF;
@@ -226,6 +243,11 @@ input[type='radio'], input[type='submit'], button, .conf-step__header, select {
     background-color: #146C72;
     color: #FFFFFF;
     box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.75); }
+  .conf-step__button-accent:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
 
 .conf-step__button-trash {
   position: relative;
@@ -419,7 +441,8 @@ input[type='radio'], input[type='submit'], button, .conf-step__header, select {
     height: 50px; }
   .conf-step__movies .conf-step__movie-title {
     font-weight: 500;
-    font-size: 1.4rem; }
+    font-size: 1.4rem;
+    word-wrap: break-word;}
   .conf-step__movies .conf-step__movie-duration {
     font-size: 1.4rem;
     color: rgba(0, 0, 0, 0.7); }
@@ -503,7 +526,8 @@ input[type='radio'], input[type='submit'], button, .conf-step__header, select {
   .popup__title {
     font-size: 2.2rem;
     font-weight: 700;
-    text-transform: uppercase; }
+    text-transform: uppercase;
+    word-wrap: break-word;}
   .popup.active {
     display: block;
     background: rgba(0, 0, 0, 0.7);
@@ -614,4 +638,120 @@ textarea.conf-step__input {
   padding: 10px 22px;
   margin-top: 20px;
   display: inline-block;
+}
+
+/* ==== page-nav (взято из client, адаптировано) ==== */
+.page-nav {
+  position: sticky;
+  top: 2px;
+  padding-bottom: 1rem;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  color: #000000;
+  z-index: 10;
+}
+.page-nav .page-nav__day {
+  flex-basis: calc(100% / 8);
+  font-size: 1.2rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.24), 0px 0px 2px rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+  text-decoration: none;
+  color: #000000;
+}
+.page-nav .page-nav__day + .page-nav__day {
+  margin-left: 1px;
+}
+.page-nav .page-nav__day .page-nav__day-week::after {
+  content: ',';
+}
+.page-nav .page-nav__day .page-nav__day-number::before {
+  content: ' ';
+}
+.page-nav .page-nav__day .page-nav__day-week,
+.page-nav .page-nav__day .page-nav__day-number {
+  display: block;
+}
+.page-nav .page-nav__day_chosen {
+  flex-grow: 1;
+  background-color: #FFFFFF;
+  font-weight: 700;
+  transform: scale(1.1);
+}
+.page-nav .page-nav__day_weekend {
+  color: #DE2121;
+}
+.page-nav .page-nav__day_next {
+  text-align: center;
+}
+.page-nav .page-nav__day_next::before {
+  content: '>';
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 2.4rem;
+}
+.page-nav .page-nav__day_prev::before {
+  content: '<';
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 2.4rem;
+}
+.page-nav .page-nav__day_today .page-nav__day-week::before {
+  content: 'Сегодня';
+  display: block;
+}
+.page-nav .page-nav__day_today .page-nav__day-week,
+.page-nav .page-nav__day_today .page-nav__day-number {
+  display: inline;
+}
+
+/* адаптация под admin: чуть меньше отступы, чтобы влезло в conf-step */
+.conf-step__dates-box .page-nav {
+  position: static; /* чтобы не sticky внутри аккордеона */
+  margin-bottom: 15px;
+  top: auto;
+}
+
+/*-убираем кашу из цифр (времени начала фильма, когда плотный график сеансов) - */
+.conf-step__seances-movie .conf-step__seances-movie-start {
+  display: none;
+}
+
+.conf-step__seances-movie:hover .conf-step__seances-movie-start {
+  display: block;
+}
+/*------------------------------------------------------------------------------ */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.page-header__logout {
+  margin-left: auto;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 3px;
+  background-color: #16A6AF;
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color .3s;
+}
+
+.page-header__logout:hover {
+  background-color: #2FC9D2;
+}
+
+@media screen and (min-width: 990px) {
+  .conf-steps nav,
+  .conf-step__dates-box nav {
+    width: auto;
+    margin: 0;
+  }
 }

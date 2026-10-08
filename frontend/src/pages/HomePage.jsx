@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import '../styles/client/normalize.css';
 import '../styles/client/styles.css';
 import { apiGet } from '../services/api';
+import LogoutButton from '../components/LogoutButton';
+import MyTicketsModal from '../components/MyTicketsModal';
 
 const WEEK_DAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
@@ -43,6 +45,7 @@ function getToday() {
 export default function HomePage() {
   const today = useMemo(getToday, []);
   const [batchStart, setBatchStart] = useState(today);
+  const [showMyTickets, setShowMyTickets] = useState(false);
 
   const days = useMemo(() => {
     const list = buildDays(batchStart);
@@ -122,7 +125,15 @@ export default function HomePage() {
   return (
     <>
       <header className="page-header">
-        <h1 className="page-header__title">Идём<span>в</span>кино</h1>
+        <div className="page-header__actions">
+          <button
+            className="page-header__logout"
+            onClick={() => setShowMyTickets(true)}
+          >
+            Мои билеты
+          </button>
+          <LogoutButton />
+        </div>
       </header>
 
       <nav className="page-nav">
@@ -231,9 +242,15 @@ export default function HomePage() {
         })}
 
         {!loading && grouped.size === 0 && !error && (
-          <p style={{ padding: 16 }}>На эту дату сеансов нет</p>
+          <p style={{ padding: 16, fontSize: 20, color: 'yellow' }}>На эту дату сеансов нет</p>
         )}
       </main>
+
+      {/* Модалки (всплывающие окна) */}
+      {showMyTickets && (
+        <MyTicketsModal onClose={() => setShowMyTickets(false)} />
+      )}
+
     </>
   );
 }
