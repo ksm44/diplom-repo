@@ -18,6 +18,9 @@ BACKEND_URL="http://localhost:8000"
 ADMIN_USERNAME="admin@admin.ru"
 ADMIN_PASSWORD="superpassword"
 
+GUEST_USERNAME="guest@guest.ru"
+GUEST_PASSWORD="superpassword2"
+
 # ==== Цвета для вывода ====
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -130,6 +133,12 @@ if [[ "$ADMIN_EXISTS" != "1" ]]; then
 else
   log "Администратор ${ADMIN_USERNAME} уже существует — пропускаю"
 fi
+
+# Создание пользователя гостя
+  curl -s -X POST "${BACKEND_URL}/auth/register" \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"${GUEST_USERNAME}\",\"password2\":\"${GUEST_PASSWORD}\"}" \
+    > /dev/null || warn "Не удалось зарегистрировать пользователя (возможно, уже существует)"
 
 # ==== 6. Сборка frontend ====
 log "Собираю frontend"

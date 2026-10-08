@@ -5,6 +5,7 @@ import HomePage from './pages/HomePage';
 import HallPage from './pages/HallPage';
 import TicketPage from './pages/TicketPage';
 import PaymentPage from './pages/PaymentPage';
+import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import PrivateRoute from "./components/PrivateRoute";
 import NotFoundPage from './pages/NotFoundPage';
@@ -45,6 +46,7 @@ function App() {
       <Routes>
         {/* публичные */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
 
         {/* только через авторизацию */}
         <Route element={<PrivateRoute />}>

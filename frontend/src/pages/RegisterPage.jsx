@@ -1,25 +1,24 @@
 import { useState } from 'react';
-import { apiPost } from '../services/api';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { apiPost } from '../services/api';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const token = localStorage.getItem('token');
   if (token) {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       const isExpired = payload.exp * 1000 < Date.now();
-
-      if (isExpired) { // если токен истёк удаляем его
+      if (isExpired) {
         localStorage.removeItem('token');
       } else {
-        return <Navigate to="/" replace />; // редиректим на homePage
+        return <Navigate to="/" replace />;
       }
     } catch {
-      localStorage.removeItem('token'); // битый токен удаляем
+      localStorage.removeItem('token');
     }
   }
 
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -28,11 +27,11 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     try {
-      const data = await apiPost('/auth/login', { username: email, password });
+      const data = await apiPost('/auth/register', { username, password });
       localStorage.setItem('token', data.access_token);
-      navigate('/admin');
-    } catch {
-      setError('Неверный логин или пароль');
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'Не удалось зарегистрироваться');
     }
   }
 
@@ -41,25 +40,24 @@ export default function LoginPage() {
       <header className="page-header">
         <div>
           <h1 className="page-header__title">Идём<span>в</span>кино</h1>
-          <span className="page-header__subtitle">Администраторррская</span>
         </div>
       </header>
       <main>
         <section className="login">
           <header className="login__header">
-            <h2 className="login__title">Авторизация</h2>
+            <h2 className="login__title">Регистрация</h2>
           </header>
           <div className="login__wrapper">
             <form className="login__form" onSubmit={handleSubmit}>
-              <label className="login__label" htmlFor="email">
-                E-mail
+              <label className="login__label" htmlFor="username">
+                Логин
                 <input
                   className="login__input"
-                  type="email"
-                  placeholder="example@domain.xyz"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  placeholder="admin@admin.ru"
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   required
                 />
               </label>
@@ -75,13 +73,13 @@ export default function LoginPage() {
                 />
               </label>
               <div className="text-center">
-                <input value="Авторизоваться" type="submit" className="login__button" />
+                <input value="Зарегистрироваться" type="submit" className="login__button" />
               </div>
             </form>
             {error && <p style={{ color: 'red' }}>{error}</p>}
 
             <p style={{ marginTop: 16, fontSize: '1.4rem' }}>
-              Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+              Уже есть аккаунт? <Link to="/login">Войти</Link>
             </p>
           </div>
         </section>
