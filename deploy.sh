@@ -211,7 +211,8 @@ fi
 echo
 log "Готово!"
 echo "  Backend:  ${BACKEND_URL}/docs"
-echo "  Frontend: http://$(hostname -I | awk '{print $1}')/"
+echo "  Frontend: локальный http://$(hostname -I | awk '{print $1}')/"
 echo
 echo "  Админ:    ${ADMIN_USERNAME} / ${ADMIN_PASSWORD}"
+echo "  Гость:    ${GUEST_USERNAME} / ${GUEST_PASSWORD}"
 echo
